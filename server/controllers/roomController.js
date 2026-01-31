@@ -1,0 +1,201 @@
+const Room = require('../models/Room');
+const { getIO } = require('../utils/socket');
+
+// Generate unique 6-character alphanumeric room code
+const generateRoomCode = () => {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let code = '';
+  for (let i = 0; i < 6; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return code;
+};
+
+const createRoom = async (req, res) => {
+  try {
+    const { minRating, maxRating, questionCount, duration } = req.body;
+    const hostId = req.session.userId;
+
+    // Generate unique room code
+    let code;
+    let isUnique = false;
+    while (!isUnique) {
+      code = generateRoomCode();
+      const existingRoom = await Room.findOne({ code });
+      if (!existingRoom) {
+        isUnique = true;
+      }
+    }
+
+    // Create room with host as first participant
+    const room = new Room({
+      code,
+      host: hostId,
+      participants: [hostId],
+      settings: {
+        minRating: minRating || 800,
+        maxRating: maxRating || 1200,
+        questionCount: questionCount || 5,
+        duration: duration || 30
+      },
+      status: 'waiting',
+      startTime: null
+    });
+
+    await room.save();
+
+    res.status(201).json({
+      code: room.code,
+      settings: room.settings,
+      participants: room.participants
+    });
+  } catch (error) {
+    console.error('Error creating room:', error);
+    res.status(500).json({ error: 'Failed to create room' });
+  }
+};
+
+const joinRoom = async (req, res) => {
+  try {
+    const { code } = req.params;
+    const userId = req.session.userId;
+
+    // Find room by code
+    const room = await Room.findOne({ code });
+
+    if (!room) {
+      return res.status(404).json({ error: 'Room not found' });
+    }
+
+    // Add user to participants if not already present
+    if (!room.participants.includes(userId)) {
+      room.participants.push(userId);
+      await room.save();
+    }
+
+    // Populate participants to get user details
+    await room.populate('participants', 'handle avatar rating');
+
+    const participants = room.participants.map(p => ({
+      handle: p.handle,
+      avatar: p.avatar,
+      rating: p.rating
+    }));
+
+    // Emit socket event for room update
+    const io = getIO();
+    io.emit('room-update', {
+      roomCode: room.code,
+      participants
+    });
+
+    res.status(200).json({ participants });
+  } catch (error) {
+    console.error('Error joining room:', error);
+    res.status(500).json({ error: 'Failed to join room' });
+  }
+};
+
+const leaveRoom = async (req, res) => {
+  try {
+    const { code } = req.params;
+    const userId = req.session.userId;
+
+    const room = await Room.findOne({ code });
+
+    if (!room) {
+      return res.status(404).json({ error: 'Room not found' });
+    }
+
+    // Remove user from participants
+    room.participants = room.participants.filter(
+      (p) => p.toString() !== userId.toString()
+    );
+    await room.save();
+
+    res.status(200).json({ message: 'Left room successfully' });
+  } catch (error) {
+    console.error('Error leaving room:', error);
+    res.status(500).json({ error: 'Failed to leave room' });
+  }
+};
+
+const getRoom = async (req, res) => {
+  try {
+    const { code } = req.params;
+
+    const room = await Room.findOne({ code })
+      .populate('host', 'handle avatar rating')
+      .populate('participants', 'handle avatar rating');
+
+    if (!room) {
+      return res.status(404).json({ error: 'Room not found' });
+    }
+
+    res.status(200).json(room);
+  } catch (error) {
+    console.error('Error getting room:', error);
+    res.status(500).json({ error: 'Failed to get room' });
+  }
+};
+
+const getParticipants = async (req, res) => {
+  try {
+    const { code } = req.params;
+
+    const room = await Room.findOne({ code }).populate(
+      'participants',
+      'handle avatar rating'
+    );
+
+    if (!room) {
+      return res.status(404).json({ error: 'Room not found' });
+    }
+
+    const participants = room.participants.map((p) => ({
+      id: p._id,
+      handle: p.handle,
+      avatar: p.avatar,
+      rating: p.rating
+    }));
+
+    res.status(200).json(participants);
+  } catch (error) {
+    console.error('Error getting participants:', error);
+    res.status(500).json({ error: 'Failed to get participants' });
+  }
+};
+
+const deleteRoom = async (req, res) => {
+  try {
+    const { code } = req.params;
+    const userId = req.session.userId;
+
+    const room = await Room.findOne({ code });
+
+    if (!room) {
+      return res.status(404).json({ error: 'Room not found' });
+    }
+
+    // Check if user is the host
+    if (room.host.toString() !== userId.toString()) {
+      return res.status(403).json({ error: 'Only the host can delete the room' });
+    }
+
+    await Room.deleteOne({ code });
+
+    res.status(200).json({ message: 'Room deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting room:', error);
+    res.status(500).json({ error: 'Failed to delete room' });
+  }
+};
+
+module.exports = {
+  createRoom,
+  joinRoom,
+  leaveRoom,
+  getRoom,
+  getParticipants,
+  deleteRoom
+};

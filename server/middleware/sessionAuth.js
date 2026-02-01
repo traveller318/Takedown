@@ -1,6 +1,13 @@
 const sessionAuth = (req, res, next) => {
   if (!req.session.userId) {
-    return res.status(401).json({ error: 'Unauthorized' });
+    console.log('[SessionAuth] Unauthorized request:', {
+      path: req.path,
+      method: req.method,
+      sessionId: req.session?.id,
+      hasSession: !!req.session,
+      cookies: req.headers.cookie ? 'present' : 'missing'
+    });
+    return res.status(401).json({ message: 'Please login first' });
   }
   next();
 };

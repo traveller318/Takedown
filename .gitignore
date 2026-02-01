@@ -3,3 +3,5 @@
 
 /client/.next
 /server/.env
+
+/client/.env.local

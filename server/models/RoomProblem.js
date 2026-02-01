@@ -21,6 +21,10 @@ const roomProblemSchema = new mongoose.Schema({
   basePoints: {
     type: Number,
     required: true
+  },
+  minPoints: {
+    type: Number,
+    required: true
   }
 });
 

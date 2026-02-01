@@ -77,14 +77,15 @@ const joinRoom = async (req, res) => {
     await room.populate('participants', 'handle avatar rating');
 
     const participants = room.participants.map(p => ({
+      id: p._id.toString(),
       handle: p.handle,
       avatar: p.avatar,
       rating: p.rating
     }));
 
-    // Emit socket event for room update
+    // Emit socket event for room update to the specific room
     const io = getIO();
-    io.emit('room-update', {
+    io.to(room.code).emit('room-update', {
       roomCode: room.code,
       participants
     });
@@ -93,6 +94,49 @@ const joinRoom = async (req, res) => {
   } catch (error) {
     console.error('Error joining room:', error);
     res.status(500).json({ error: 'Failed to join room' });
+  }
+};
+
+const updateSettings = async (req, res) => {
+  try {
+    const { code } = req.params;
+    const userId = req.session.userId;
+    const { minRating, maxRating, questionCount, duration } = req.body;
+
+    const room = await Room.findOne({ code });
+
+    if (!room) {
+      return res.status(404).json({ error: 'Room not found' });
+    }
+
+    // Check if user is the host
+    if (room.host.toString() !== userId.toString()) {
+      return res.status(403).json({ error: 'Only the host can update settings' });
+    }
+
+    // Check if game has started
+    if (room.status !== 'waiting') {
+      return res.status(400).json({ error: 'Cannot update settings after game has started' });
+    }
+
+    // Update settings
+    room.settings = {
+      minRating: minRating || room.settings.minRating,
+      maxRating: maxRating || room.settings.maxRating,
+      questionCount: questionCount || room.settings.questionCount,
+      duration: duration || room.settings.duration
+    };
+
+    await room.save();
+
+    // Populate and return updated room
+    await room.populate('host', 'handle avatar rating');
+    await room.populate('participants', 'handle avatar rating');
+
+    res.status(200).json(room);
+  } catch (error) {
+    console.error('Error updating settings:', error);
+    res.status(500).json({ error: 'Failed to update settings' });
   }
 };
 
@@ -112,6 +156,23 @@ const leaveRoom = async (req, res) => {
       (p) => p.toString() !== userId.toString()
     );
     await room.save();
+
+    // Populate remaining participants and emit room update
+    await room.populate('participants', 'handle avatar rating');
+
+    const participants = room.participants.map(p => ({
+      id: p._id.toString(),
+      handle: p.handle,
+      avatar: p.avatar,
+      rating: p.rating
+    }));
+
+    // Emit socket event for room update to remaining participants
+    const io = getIO();
+    io.to(code).emit('room-update', {
+      roomCode: code,
+      participants
+    });
 
     res.status(200).json({ message: 'Left room successfully' });
   } catch (error) {
@@ -197,5 +258,6 @@ module.exports = {
   leaveRoom,
   getRoom,
   getParticipants,
-  deleteRoom
+  deleteRoom,
+  updateSettings
 };

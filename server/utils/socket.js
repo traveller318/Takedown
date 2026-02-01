@@ -21,25 +21,25 @@ const initSocket = (server, sessionMiddleware) => {
     const session = socket.request.session;
 
     if (!session || !session.userId) {
-      return next(new Error('Authentication error: No session found'));
+      return next(new Error('Unauthorized'));
     }
 
     try {
       const user = await User.findById(session.userId);
       if (!user) {
-        return next(new Error('Authentication error: User not found'));
+        return next(new Error('Unauthorized'));
       }
       // Attach user to socket for easy access
       socket.user = user;
       next();
     } catch (err) {
-      next(new Error('Authentication error: Database error'));
+      next(new Error('Unauthorized'));
     }
   });
 
   // Register socket event listeners
-  const registerSocketEvents = require('../sockets');
-  registerSocketEvents(io);
+  const initSockets = require('../sockets');
+  initSockets(io);
 
   return io;
 };

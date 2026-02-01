@@ -12,6 +12,9 @@ router.post('/:code/join', sessionAuth, roomController.joinRoom);
 // Leave a room
 router.post('/:code/leave', sessionAuth, roomController.leaveRoom);
 
+// Update room settings (host only)
+router.put('/:code/settings', sessionAuth, roomController.updateSettings);
+
 // Get full room details
 router.get('/:code', sessionAuth, roomController.getRoom);
 

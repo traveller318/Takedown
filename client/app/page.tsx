@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { createRoom, joinRoom } from "@/lib/api";
+import { createRoom, joinRoom, ApiError } from "@/lib/api";
 
 export default function Home() {
   const router = useRouter();
@@ -28,6 +28,10 @@ export default function Home() {
   const [isCreatingRoom, setIsCreatingRoom] = useState(false);
   const [isJoiningRoom, setIsJoiningRoom] = useState(false);
   const { user, isLoading, login, logout } = useAuth();
+  
+  // Refs to prevent double-clicks
+  const isCreatingRef = useRef(false);
+  const isJoiningRef = useRef(false);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -63,7 +67,11 @@ export default function Home() {
       return;
     }
 
+    // Prevent double-click
+    if (isCreatingRef.current || isCreatingRoom) return;
+    isCreatingRef.current = true;
     setIsCreatingRoom(true);
+
     try {
       const response = await createRoom({
         minRating: 800,
@@ -76,8 +84,18 @@ export default function Home() {
       router.push(`/room/${response.code}`);
     } catch (error) {
       console.error("Error creating room:", error);
-      toast.error(error instanceof Error ? error.message : "Failed to create room");
+      if (error instanceof ApiError) {
+        if (error.isUnauthorized) {
+          toast.error("Please login first");
+          setIsDialogOpen(true);
+        } else {
+          toast.error(error.message);
+        }
+      } else {
+        toast.error(error instanceof Error ? error.message : "Failed to create room");
+      }
       setIsCreatingRoom(false);
+      isCreatingRef.current = false;
     }
   };
 
@@ -93,18 +111,33 @@ export default function Home() {
       return;
     }
 
+    // Prevent double-click
+    if (isJoiningRef.current || isJoiningRoom) return;
+    isJoiningRef.current = true;
     setIsJoiningRoom(true);
+
     try {
       await joinRoom(roomCode.trim().toUpperCase());
       toast.success("Joined room successfully!");
       router.push(`/room/${roomCode.trim().toUpperCase()}`);
     } catch (error) {
       console.error("Error joining room:", error);
-      toast.error(error instanceof Error ? error.message : "Room not found");
+      if (error instanceof ApiError) {
+        if (error.isNotFound) {
+          toast.error("Room not found. Please check the code and try again.");
+        } else if (error.isUnauthorized) {
+          toast.error("Please login first");
+          setIsDialogOpen(true);
+        } else {
+          toast.error(error.message);
+        }
+      } else {
+        toast.error(error instanceof Error ? error.message : "Failed to join room");
+      }
       setIsJoiningRoom(false);
+      isJoiningRef.current = false;
     }
   };
-
   if (isCreatingRoom) {
     return (
       <div className="min-h-screen bg-linear-to-br from-black via-neutral-900 to-black text-white flex items-center justify-center">

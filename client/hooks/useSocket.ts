@@ -10,7 +10,16 @@ type EventCallback = (...args: unknown[]) => void;
  * Provides easy access to socket, connection state, and helper functions
  */
 export function useSocket() {
-  const { socket, isConnected, connect, disconnect } = useSocketContext();
+  const { 
+    socket, 
+    isConnected, 
+    isReconnecting, 
+    reconnectAttempt, 
+    connect, 
+    disconnect,
+    trackRoom,
+    untrackRoom,
+  } = useSocketContext();
   const listenersRef = useRef<Map<string, EventCallback>>(new Map());
 
   /**
@@ -142,8 +151,12 @@ export function useSocket() {
   return {
     socket,
     isConnected,
+    isReconnecting,
+    reconnectAttempt,
     connect,
     disconnect,
+    trackRoom,
+    untrackRoom,
     emit,
     on,
     off,

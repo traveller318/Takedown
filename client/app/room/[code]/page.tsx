@@ -3,11 +3,12 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Loader2, Flag, Users, Copy, Play, LogOut, Crown, WifiOff, Swords } from "lucide-react";
+import { Loader2, Flag, Users, Copy, Play, LogOut, Crown, Swords } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useGame } from "@/context/GameContext";
 import { useSocket } from "@/hooks/useSocket";
-import { getRoom, leaveRoom, updateRoomSettings, joinRoom } from "@/lib/api";
+import { useLoadingState } from "@/hooks/useDebounce";
+import { getRoom, leaveRoom, updateRoomSettings, joinRoom, ApiError } from "@/lib/api";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -18,6 +19,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { ReconnectingBanner } from "@/components/ReconnectingBanner";
+import { RoomNotFound } from "@/components/NotFound";
 import type { Room, RoomSettings } from "@/types";
 
 // Type for socket participant (backend may send 'id' or '_id' or neither)
@@ -42,20 +45,23 @@ export default function RoomPage() {
   const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
   const { isGameStarting, setIsGameStarting } = useGame();
-  const { socket, isConnected, emit, on, off } = useSocket();
+  const { socket, isConnected, isReconnecting, reconnectAttempt, emit, on, off, trackRoom, untrackRoom } = useSocket();
   const roomCode = params.code as string;
 
   const [room, setRoom] = useState<Room | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
+  const [roomNotFound, setRoomNotFound] = useState(false);
   const [isStartingGame, setIsStartingGame] = useState(false);
-  const [isReconnecting, setIsReconnecting] = useState(false);
   const [settings, setSettings] = useState<RoomSettings>({
     minRating: 800,
     maxRating: 1300,
     questionCount: 3,
     duration: 30,
   });
+
+  // Loading states for buttons (prevents double-click)
+  const saveSettingsState = useLoadingState();
+  const exitRoomState = useLoadingState();
 
   // Track previous participants to detect joins/leaves
   const previousParticipantsRef = useRef<Set<string>>(new Set());
@@ -72,12 +78,25 @@ export default function RoomPage() {
       setRoom(roomData);
       setSettings(roomData.settings);
       setIsLoading(false);
+      setRoomNotFound(false);
       return true;
-    } catch {
-      // Silently fail - room might not exist or user might not be a participant yet
+    } catch (error) {
+      // Handle specific error types
+      if (error instanceof ApiError) {
+        if (error.isNotFound) {
+          setRoomNotFound(true);
+          return false;
+        }
+        if (error.isUnauthorized) {
+          toast.error("Please login first");
+          router.push("/");
+          return false;
+        }
+      }
+      // Silently fail for other errors - room might not exist or user might not be a participant yet
       return false;
     }
-  }, [roomCode]);
+  }, [roomCode, router]);
 
   // Auto-join room when page loads (handles refresh case)
   const joinAndFetchRoom = useCallback(async () => {
@@ -86,25 +105,53 @@ export default function RoomPage() {
       const roomExists = await fetchRoom();
       if (roomExists) return;
 
+      // If room was not found (404), don't try to join
+      if (roomNotFound) return;
+
       // If fetch failed, try to join the room first
       try {
         await joinRoom(roomCode);
-      } catch {
-        // Join might fail if room doesn't exist - that's handled below
+      } catch (error) {
+        if (error instanceof ApiError) {
+          if (error.isNotFound) {
+            setRoomNotFound(true);
+            return;
+          }
+          if (error.isUnauthorized) {
+            toast.error("Please login first");
+            router.push("/");
+            return;
+          }
+        }
+        // Join might fail for other reasons
       }
       
       // Try fetching again after join attempt
       const joined = await fetchRoom();
-      if (!joined) {
+      if (!joined && !roomNotFound) {
         // Room truly doesn't exist
-        toast.error("Room not found");
-        router.push("/");
+        setRoomNotFound(true);
       }
-    } catch {
-      toast.error("Room not found");
-      router.push("/");
+    } catch (error) {
+      if (error instanceof ApiError) {
+        if (error.isNotFound) {
+          setRoomNotFound(true);
+          return;
+        }
+        if (error.isUnauthorized) {
+          toast.error("Please login first");
+          router.push("/");
+          return;
+        }
+        toast.error(error.message);
+      } else {
+        toast.error("Failed to load room");
+      }
+      setRoomNotFound(true);
+    } finally {
+      setIsLoading(false);
     }
-  }, [roomCode, router, fetchRoom]);
+  }, [roomCode, router, fetchRoom, roomNotFound]);
 
   // Join socket room
   const joinSocketRoom = useCallback(() => {
@@ -113,7 +160,10 @@ export default function RoomPage() {
     console.log("[RoomPage] Emitting join-room for:", roomCode);
     emit("join-room", { roomCode });
     hasJoinedSocketRoom.current = true;
-  }, [isConnected, socket, roomCode, emit]);
+    
+    // Track room for auto-rejoin after reconnect
+    trackRoom(roomCode);
+  }, [isConnected, socket, roomCode, emit, trackRoom]);
 
   // Handle room-update events
   const handleRoomUpdate = useCallback((data: RoomUpdateData) => {
@@ -178,12 +228,11 @@ export default function RoomPage() {
     setIsGameStarting(false);
     
     if (data.message.includes("Room not found") || data.message.includes("not found")) {
-      toast.error("Room not found");
-      router.push("/");
+      setRoomNotFound(true);
     } else {
       toast.error(data.message);
     }
-  }, [router, setIsGameStarting]);
+  }, [setIsGameStarting]);
 
   // Handle game-starting event (show loading for all users immediately)
   const handleGameStarting = useCallback((data: { roomCode: string }) => {
@@ -218,35 +267,26 @@ export default function RoomPage() {
     }
   }, [isConnected, room, joinSocketRoom]);
 
-  // Handle reconnection state
+  // Handle reconnection - rejoin socket room after reconnect
   useEffect(() => {
     if (!socket) return;
 
-    const handleDisconnect = () => {
-      if (isMountedRef.current) {
-        setIsReconnecting(true);
-        hasJoinedSocketRoom.current = false;
-      }
-    };
-
     const handleReconnect = () => {
-      if (isMountedRef.current) {
-        setIsReconnecting(false);
-        // Re-join room after reconnection
-        if (room) {
-          joinSocketRoom();
-        }
+      if (isMountedRef.current && room) {
+        console.log("[RoomPage] Reconnected, rejoining room");
+        hasJoinedSocketRoom.current = false;
+        joinSocketRoom();
+        // Refresh room data after reconnect
+        fetchRoom();
       }
     };
 
-    socket.on("disconnect", handleDisconnect);
     socket.on("connect", handleReconnect);
 
     return () => {
-      socket.off("disconnect", handleDisconnect);
       socket.off("connect", handleReconnect);
     };
-  }, [socket, room, joinSocketRoom]);
+  }, [socket, room, joinSocketRoom, fetchRoom]);
 
   // Initialize previous participants when room first loads
   useEffect(() => {
@@ -255,12 +295,33 @@ export default function RoomPage() {
     }
   }, [room?.participants]);
 
+  // Handle browser back/forward navigation
+  useEffect(() => {
+    const handlePopState = () => {
+      // When navigating away, clean up socket room
+      if (hasJoinedSocketRoom.current && socket?.connected) {
+        console.log("[RoomPage] Browser navigation detected, cleaning up");
+        emit("leave-room", { roomCode });
+        untrackRoom(roomCode);
+        hasJoinedSocketRoom.current = false;
+      }
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+    };
+  }, [socket, emit, roomCode, untrackRoom]);
+
   // Cleanup on unmount - only emit leave-room if we haven't already left
   useEffect(() => {
     isMountedRef.current = true;
 
     return () => {
       isMountedRef.current = false;
+      // Untrack room from reconnect tracking
+      untrackRoom(roomCode);
+      
       // Only emit leave-room if still considered in the room (e.g., browser close/refresh)
       // If user clicked Exit button, hasJoinedSocketRoom.current will be false
       if (hasJoinedSocketRoom.current && socket?.connected) {
@@ -269,7 +330,7 @@ export default function RoomPage() {
         hasJoinedSocketRoom.current = false;
       }
     };
-  }, [emit, roomCode, socket]);
+  }, [emit, roomCode, socket, untrackRoom]);
 
   useEffect(() => {
     // Don't do anything while auth is still loading
@@ -292,23 +353,31 @@ export default function RoomPage() {
   };
 
   const handleSaveSettings = async () => {
-    if (!isHost) return;
+    if (!isHost || saveSettingsState.isLoading) return;
     
-    setIsSaving(true);
-    try {
-      const updatedRoom = await updateRoomSettings(roomCode, settings);
-      setRoom(updatedRoom);
-      toast.success("Settings saved!");
-    } catch (error) {
-      console.error("Error saving settings:", error);
-      toast.error("Failed to save settings");
-    } finally {
-      setIsSaving(false);
-    }
+    await saveSettingsState.withLoading(async () => {
+      try {
+        const updatedRoom = await updateRoomSettings(roomCode, settings);
+        setRoom(updatedRoom);
+        toast.success("Settings saved!");
+      } catch (error) {
+        console.error("Error saving settings:", error);
+        if (error instanceof ApiError) {
+          if (error.isUnauthorized) {
+            toast.error("Please login first");
+            router.push("/");
+            return;
+          }
+          toast.error(error.message);
+        } else {
+          toast.error("Failed to save settings");
+        }
+      }
+    });
   };
 
   const handleStartGame = async () => {
-    if (!isHost) return;
+    if (!isHost || isStartingGame) return;
     if (!isConnected) {
       toast.error("Not connected to server. Please wait...");
       return;
@@ -329,22 +398,35 @@ export default function RoomPage() {
       console.error("Error starting game:", error);
       toast.error(error instanceof Error ? error.message : "Failed to start game");
       setIsStartingGame(false);
+      setIsGameStarting(false);
     }
   };
 
   const handleExitRoom = async () => {
-    try {
-      // Mark that we're intentionally leaving (not disconnecting)
-      hasJoinedSocketRoom.current = false;
-      
-      // HTTP call will remove from DB and emit socket update to others
-      await leaveRoom(roomCode);
-      toast.success("Left the room");
-      router.push("/");
-    } catch (error) {
-      console.error("Error leaving room:", error);
-      toast.error("Failed to leave room");
-    }
+    if (exitRoomState.isLoading) return;
+    
+    await exitRoomState.withLoading(async () => {
+      try {
+        // Mark that we're intentionally leaving (not disconnecting)
+        hasJoinedSocketRoom.current = false;
+        untrackRoom(roomCode);
+        
+        // HTTP call will remove from DB and emit socket update to others
+        await leaveRoom(roomCode);
+        toast.success("Left the room");
+        router.push("/");
+      } catch (error) {
+        console.error("Error leaving room:", error);
+        if (error instanceof ApiError) {
+          toast.error(error.message);
+        } else {
+          toast.error("Failed to leave room");
+        }
+        // Restore socket room tracking on failure
+        trackRoom(roomCode);
+        hasJoinedSocketRoom.current = true;
+      }
+    });
   };
 
   if (authLoading || isLoading) {
@@ -358,12 +440,24 @@ export default function RoomPage() {
     );
   }
 
+  // Show not found page if room doesn't exist
+  if (roomNotFound) {
+    return <RoomNotFound />;
+  }
+
   if (!room) {
     return null;
   }
 
   return (
     <div className="min-h-screen bg-linear-to-br from-black via-neutral-900 to-black text-white p-6">
+      {/* Reconnecting Banner */}
+      <ReconnectingBanner
+        isConnected={isConnected}
+        isReconnecting={isReconnecting}
+        reconnectAttempt={reconnectAttempt}
+        maxAttempts={5}
+      />
       {/* Game Starting Overlay - Shows for all participants */}
       {(isStartingGame || isGameStarting) && (
         <div className="fixed inset-0 z-100 bg-black/90 backdrop-blur-sm flex items-center justify-center">
@@ -391,17 +485,6 @@ export default function RoomPage() {
               <div className="h-2 w-2 rounded-full bg-white/60 animate-bounce [animation-delay:-0.15s]" />
               <div className="h-2 w-2 rounded-full bg-white/60 animate-bounce" />
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* Reconnecting Banner */}
-      {isReconnecting && (
-        <div className="fixed top-0 left-0 right-0 z-50 bg-yellow-600/90 backdrop-blur text-white px-4 py-2">
-          <div className="max-w-6xl mx-auto flex items-center justify-center gap-2">
-            <WifiOff className="h-4 w-4" />
-            <span className="text-sm font-medium">Connection lost. Reconnecting...</span>
-            <Loader2 className="h-4 w-4 animate-spin" />
           </div>
         </div>
       )}
@@ -445,7 +528,7 @@ export default function RoomPage() {
               {isHost && (
                 <Button
                   onClick={handleStartGame}
-                  disabled={isStartingGame || !isConnected}
+                  disabled={isStartingGame || !isConnected || isReconnecting}
                   className="bg-white hover:bg-gray-200 text-black gap-2"
                 >
                   {isStartingGame ? (
@@ -463,11 +546,21 @@ export default function RoomPage() {
               )}
               <Button
                 onClick={handleExitRoom}
+                disabled={exitRoomState.isLoading}
                 variant="outline"
                 className="border-white/20 text-gray-300 hover:bg-white/10 hover:text-white gap-2"
               >
-                <LogOut className="h-4 w-4" />
-                Exit Room
+                {exitRoomState.isLoading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Leaving...
+                  </>
+                ) : (
+                  <>
+                    <LogOut className="h-4 w-4" />
+                    Exit Room
+                  </>
+                )}
               </Button>
             </div>
           </div>
@@ -632,10 +725,10 @@ export default function RoomPage() {
               {isHost && (
                 <Button
                   onClick={handleSaveSettings}
-                  disabled={isSaving}
+                  disabled={saveSettingsState.isLoading}
                   className="w-full bg-neutral-700 hover:bg-neutral-600 text-white"
                 >
-                  {isSaving ? (
+                  {saveSettingsState.isLoading ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       Saving...

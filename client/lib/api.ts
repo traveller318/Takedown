@@ -2,26 +2,59 @@ import type { User, Room, RoomSettings, Problem, LeaderboardEntry } from '@/type
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
+// Custom error class for API errors
+export class ApiError extends Error {
+  status: number;
+  isUnauthorized: boolean;
+  isNotFound: boolean;
+  isServerError: boolean;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+    this.isUnauthorized = status === 401;
+    this.isNotFound = status === 404;
+    this.isServerError = status >= 500;
+  }
+}
+
 // Base fetch helper with credentials
 async function fetchApi<T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {
-  const response = await fetch(`${API_URL}/api${endpoint}`, {
-    ...options,
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
-  });
+  try {
+    const response = await fetch(`${API_URL}/api${endpoint}`, {
+      ...options,
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+    });
 
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ message: 'Request failed' }));
-    throw new Error(error.message || error.error || `HTTP error! status: ${response.status}`);
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ message: 'Request failed' }));
+      throw new ApiError(
+        error.message || error.error || `HTTP error! status: ${response.status}`,
+        response.status
+      );
+    }
+
+    return response.json();
+  } catch (error) {
+    // Re-throw ApiError as is
+    if (error instanceof ApiError) {
+      throw error;
+    }
+    // Handle network errors
+    if (error instanceof TypeError && error.message.includes('fetch')) {
+      throw new ApiError('Unable to connect to server. Please check your internet connection.', 0);
+    }
+    // Re-throw other errors
+    throw error;
   }
-
-  return response.json();
 }
 
 // Auth API functions

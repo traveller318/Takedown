@@ -33,7 +33,7 @@ const createSocket = (): Socket => {
   });
 
   socketInstance.on("connect_error", (error) => {
-    console.error("[Socket] Connection error:", error.message);
+    console.warn("[Socket] Connection error:", error.message);
   });
 
   socketInstance.on("disconnect", (reason) => {
@@ -49,11 +49,11 @@ const createSocket = (): Socket => {
   });
 
   socketInstance.on("reconnect_error", (error) => {
-    console.error("[Socket] Reconnection error:", error.message);
+    console.warn("[Socket] Reconnection error:", error.message);
   });
 
   socketInstance.on("reconnect_failed", () => {
-    console.error("[Socket] Reconnection failed after all attempts");
+    console.warn("[Socket] Reconnection failed after all attempts");
   });
 
   socketInstance.on("connection-success", () => {

@@ -24,7 +24,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { GameHeader, ProblemsList, Leaderboard } from "@/components/game";
-import { getGameState, getGameProblems, getGameLeaderboard } from "@/lib/api";
+import { ReconnectingBanner } from "@/components/ReconnectingBanner";
+import { GameNotFound } from "@/components/NotFound";
+import { getGameState, getGameProblems, getGameLeaderboard, ApiError } from "@/lib/api";
 import type { Problem, ProblemSolvedData, ProblemNotSolvedData } from "@/types";
 
 // Type for tracking solved problems with earned points
@@ -36,7 +38,7 @@ export default function GamePage() {
   const params = useParams();
   const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
-  const { socket, isConnected, emit, on, off } = useSocket();
+  const { socket, isConnected, isReconnecting, reconnectAttempt, emit, on, off, trackRoom, untrackRoom } = useSocket();
   const {
     problems,
     startTime,
@@ -58,6 +60,7 @@ export default function GamePage() {
   const [activeTab, setActiveTab] = useState<"problems" | "leaderboard">("problems");
   const [isLoadingState, setIsLoadingState] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [gameNotFound, setGameNotFound] = useState(false);
   const [isGameEnded, setIsGameEnded] = useState(false);
   const [showGameOverDialog, setShowGameOverDialog] = useState(false);
   
@@ -132,6 +135,20 @@ export default function GamePage() {
       } catch (error) {
         console.error("[GamePage] Failed to fetch game state:", error);
         
+        // Handle specific error types
+        if (error instanceof ApiError) {
+          if (error.isNotFound) {
+            setGameNotFound(true);
+            setIsLoadingState(false);
+            return;
+          }
+          if (error.isUnauthorized) {
+            toast.error("Please login first");
+            router.push("/");
+            return;
+          }
+        }
+        
         // Fallback: Try fetching problems and leaderboard separately
         try {
           const [problemsRes, leaderboardRes] = await Promise.all([
@@ -143,7 +160,11 @@ export default function GamePage() {
           updateLeaderboard(leaderboardRes.leaderboard);
         } catch (fallbackError) {
           console.error("[GamePage] Fallback fetch also failed:", fallbackError);
-          setFetchError("Failed to load game data. Please try refreshing.");
+          if (fallbackError instanceof ApiError && fallbackError.isNotFound) {
+            setGameNotFound(true);
+          } else {
+            setFetchError("Failed to load game data. Please try refreshing.");
+          }
         }
       } finally {
         setIsLoadingState(false);
@@ -169,9 +190,13 @@ export default function GamePage() {
     
     console.log("[GamePage] Joining room socket channel:", roomCode);
     emit("join-room", { roomCode });
+    trackRoom(roomCode);
     
-    // No cleanup needed - we want to stay in the room
-  }, [socket, isConnected, roomCode, emit]);
+    // Cleanup - untrack room when component unmounts
+    return () => {
+      untrackRoom(roomCode);
+    };
+  }, [socket, isConnected, roomCode, emit, trackRoom, untrackRoom]);
 
   // Handle time up - show game over dialog
   const handleTimeUp = useCallback(() => {
@@ -196,6 +221,9 @@ export default function GamePage() {
       emit("leave-room", { roomCode });
     }
     
+    // Untrack room from reconnect tracking
+    untrackRoom(roomCode);
+    
     // Clear game state
     clearGame();
     
@@ -207,7 +235,7 @@ export default function GamePage() {
     
     // Navigate home
     router.push("/");
-  }, [isConnected, emit, roomCode, clearGame, router]);
+  }, [isConnected, emit, roomCode, clearGame, router, untrackRoom]);
   
   // Handle return home from game over dialog
   const handleReturnHome = useCallback(() => {
@@ -301,7 +329,12 @@ export default function GamePage() {
     }
     
     if (!isConnected) {
-      toast.error("Not connected to server");
+      toast.error("Not connected to server. Please wait for reconnection.");
+      return;
+    }
+    
+    // Prevent double-click - if already checking a problem, ignore
+    if (checkingProblem !== null) {
       return;
     }
 
@@ -332,7 +365,7 @@ export default function GamePage() {
       contestId: problem.contestId,
       index: problem.index,
     });
-  }, [isConnected, roomCode, solvedProblems, emit, isGameEnded]);
+  }, [isConnected, roomCode, solvedProblems, emit, isGameEnded, checkingProblem]);
   
   // Cleanup timeout on unmount
   useEffect(() => {
@@ -342,6 +375,24 @@ export default function GamePage() {
       }
     };
   }, []);
+
+  // Handle browser back/forward navigation
+  useEffect(() => {
+    const handlePopState = () => {
+      // Clean up when navigating away
+      if (!cleanupDoneRef.current && isConnected) {
+        console.log("[GamePage] Browser navigation detected, cleaning up");
+        emit("leave-room", { roomCode });
+        untrackRoom(roomCode);
+        cleanupDoneRef.current = true;
+      }
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+    };
+  }, [isConnected, emit, roomCode, untrackRoom]);
   
   // Handle browser beforeunload (tab close, refresh) - show confirmation during active game
   useEffect(() => {
@@ -383,6 +434,11 @@ export default function GamePage() {
       return;
     }
   }, [authLoading, user, router]);
+
+  // Show not found page
+  if (gameNotFound) {
+    return <GameNotFound />;
+  }
 
   // Loading state
   if (authLoading || isLoadingState || (!isGameActive && displayProblems.length === 0)) {
@@ -439,6 +495,14 @@ export default function GamePage() {
 
   return (
     <div className="min-h-screen bg-linear-to-br from-black via-neutral-900 to-black text-white p-6">
+      {/* Reconnecting Banner */}
+      <ReconnectingBanner
+        isConnected={isConnected}
+        isReconnecting={isReconnecting}
+        reconnectAttempt={reconnectAttempt}
+        maxAttempts={5}
+      />
+
       <div className="max-w-6xl mx-auto">
         {/* Header with Timer and Exit */}
         <GameHeader

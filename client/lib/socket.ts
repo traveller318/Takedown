@@ -9,7 +9,7 @@ const createSocket = (): Socket => {
     withCredentials: true,
     autoConnect: false,
     reconnection: true,
-    reconnectionAttempts: 5,
+    reconnectionAttempts: 15,
     reconnectionDelay: 1000,
     reconnectionDelayMax: 5000,
     timeout: 20000,

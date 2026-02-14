@@ -35,8 +35,8 @@ const createRoom = async (req, res) => {
       settings: {
         minRating: minRating || 800,
         maxRating: maxRating || 1200,
-        questionCount: questionCount || 5,
-        duration: duration || 30
+        questionCount: 2,
+        duration: 15
       },
       status: 'waiting',
       startTime: null
@@ -119,12 +119,12 @@ const updateSettings = async (req, res) => {
       return res.status(400).json({ error: 'Cannot update settings after game has started' });
     }
 
-    // Update settings
+    // Update settings (questionCount and duration are fixed)
     room.settings = {
       minRating: minRating || room.settings.minRating,
       maxRating: maxRating || room.settings.maxRating,
-      questionCount: questionCount || room.settings.questionCount,
-      duration: duration || room.settings.duration
+      questionCount: 2,
+      duration: 15
     };
 
     await room.save();

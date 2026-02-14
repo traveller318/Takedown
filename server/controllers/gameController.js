@@ -128,11 +128,10 @@ const getState = async (req, res) => {
   }
 };
 
-// Fixed scoring for exactly 3 problems
+// Fixed scoring for exactly 2 problems
 const PROBLEM_SCORING = [
-  { basePoints: 500, minPoints: 250 },   // Problem 1 (Easy)
-  { basePoints: 750, minPoints: 500 },   // Problem 2 (Medium)
-  { basePoints: 1000, minPoints: 750 }   // Problem 3 (Hard)
+  { basePoints: 500, minPoints: 250 },   // Problem 1 (Easier half)
+  { basePoints: 1000, minPoints: 500 }   // Problem 2 (Harder half)
 ];
 
 /**
@@ -172,26 +171,37 @@ const startGameInternal = async (roomCode) => {
 
     console.log('[startGameInternal] Got', data.result.problems.length, 'problems from CF');
 
-    // 4. Filter by rating range
-    const filteredProblems = data.result.problems.filter(
-      p => p.rating && p.rating >= room.settings.minRating && p.rating <= room.settings.maxRating
+    // 4. Calculate mid rating for split selection
+    const minR = room.settings.minRating;
+    const maxR = room.settings.maxRating;
+    const midR = Math.floor((minR + maxR) / 2);
+
+    console.log('[startGameInternal] Rating split:', minR, '-', midR, '-', maxR);
+
+    // 5. Filter problems into two halves by rating
+    const lowerHalf = data.result.problems.filter(
+      p => p.rating && p.rating >= minR && p.rating <= midR
+    );
+    const upperHalf = data.result.problems.filter(
+      p => p.rating && p.rating > midR && p.rating <= maxR
     );
 
-    console.log('[startGameInternal] Filtered to', filteredProblems.length, 'problems in rating range', room.settings.minRating, '-', room.settings.maxRating);
+    console.log('[startGameInternal] Lower half:', lowerHalf.length, 'problems (' + minR + '-' + midR + ')');
+    console.log('[startGameInternal] Upper half:', upperHalf.length, 'problems (' + (midR + 1) + '-' + maxR + ')');
 
-    // 5. Shuffle randomly
-    const shuffled = filteredProblems.sort(() => Math.random() - 0.5);
+    // 6. Shuffle each half and pick one from each
+    const shuffledLower = lowerHalf.sort(() => Math.random() - 0.5);
+    const shuffledUpper = upperHalf.sort(() => Math.random() - 0.5);
 
-    // 6. Take exactly 3 problems (or questionCount if configured)
-    const problemCount = Math.min(room.settings.questionCount || 3, 3);
-    const selected = shuffled.slice(0, problemCount);
-
-    console.log('[startGameInternal] Selected', selected.length, 'problems');
-
-    if (selected.length < problemCount) {
-      console.log('[startGameInternal] Not enough problems found');
+    if (shuffledLower.length < 1 || shuffledUpper.length < 1) {
+      console.log('[startGameInternal] Not enough problems found in one of the halves');
       return { success: false, error: 'Could not fetch enough problems. Try adjusting rating range.' };
     }
+
+    // Select exactly 2 problems: one from each half
+    const selected = [shuffledLower[0], shuffledUpper[0]];
+
+    console.log('[startGameInternal] Selected', selected.length, 'problems');
 
     // 7. Clear any existing problems for this room (in case of restart)
     await RoomProblem.deleteMany({ roomId: room._id });
@@ -275,20 +285,28 @@ const startGame = async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch problems from Codeforces' });
     }
 
-    // 5. Filter by rating range
-    const filteredProblems = data.result.problems.filter(
-      p => p.rating && p.rating >= room.settings.minRating && p.rating <= room.settings.maxRating
+    // 5. Calculate mid rating for split selection
+    const minR = room.settings.minRating;
+    const maxR = room.settings.maxRating;
+    const midR = Math.floor((minR + maxR) / 2);
+
+    // 6. Filter problems into two halves by rating
+    const lowerHalf = data.result.problems.filter(
+      p => p.rating && p.rating >= minR && p.rating <= midR
+    );
+    const upperHalf = data.result.problems.filter(
+      p => p.rating && p.rating > midR && p.rating <= maxR
     );
 
-    // 6. Shuffle randomly
-    const shuffled = filteredProblems.sort(() => Math.random() - 0.5);
+    // 7. Shuffle each half and pick one from each
+    const shuffledLower = lowerHalf.sort(() => Math.random() - 0.5);
+    const shuffledUpper = upperHalf.sort(() => Math.random() - 0.5);
 
-    // 7. Take exactly 3 problems
-    const selected = shuffled.slice(0, 3);
-
-    if (selected.length < 3) {
-      return res.status(500).json({ error: 'Could not fetch enough problems' });
+    if (shuffledLower.length < 1 || shuffledUpper.length < 1) {
+      return res.status(500).json({ error: 'Could not fetch enough problems. Try adjusting rating range.' });
     }
+
+    const selected = [shuffledLower[0], shuffledUpper[0]];
 
     // 8. Create RoomProblem docs with fixed scoring
     await Promise.all(
@@ -482,7 +500,7 @@ const checkSubmissionInternal = async (roomCode, oderId, handle, contestId, inde
     // Calculate points
     const solveTime = earliestSubmission.creationTimeSeconds * 1000;
     const elapsedMinutes = Math.floor((solveTime - roomStartTime) / 60000);
-    const rawPoints = problem.basePoints - elapsedMinutes;
+    const rawPoints = problem.basePoints - (elapsedMinutes * 5);
     const points = Math.max(rawPoints, problem.minPoints);
 
     // Save score
@@ -608,7 +626,7 @@ const checkSubmission = async (req, res) => {
     // CRITICAL: Use submission time ONLY (never Date.now())
     const solveTime = earliestSubmission.creationTimeSeconds * 1000;
     const elapsedMinutes = Math.floor((solveTime - roomStartTime) / 60000);
-    const rawPoints = problem.basePoints - elapsedMinutes;
+    const rawPoints = problem.basePoints - (elapsedMinutes * 5);
     const points = Math.max(rawPoints, problem.minPoints);
 
     // STEP 7 — SAVE SCORE

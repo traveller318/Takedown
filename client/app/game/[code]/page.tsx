@@ -72,6 +72,9 @@ export default function GamePage() {
   
   // Track if cleanup has been done (to prevent double cleanup)
   const cleanupDoneRef = useRef(false);
+  
+  // Track if tab is closing (server grace period handles disconnect)
+  const isTabClosingRef = useRef(false);
 
   // Use context problems if available, otherwise use locally fetched problems
   // Always default to empty array to prevent undefined errors
@@ -313,10 +316,32 @@ export default function GamePage() {
     on<ProblemNotSolvedData>("problem-not-solved", handleProblemNotSolved);
     on<{ message: string }>("error", handleError);
 
+    // Listen for player disconnect/reconnect events
+    const handlePlayerDisconnected = (data: { userId: string; handle: string; gracePeriod: number }) => {
+      if (data.userId === user?._id) return;
+      toast.info(`${data.handle} disconnected. Waiting ${data.gracePeriod}s for reconnect...`, {
+        icon: "⚠️",
+        duration: 5000,
+      });
+    };
+
+    const handlePlayerReconnected = (data: { userId: string; handle: string }) => {
+      if (data.userId === user?._id) return;
+      toast.success(`${data.handle} reconnected!`, {
+        icon: "🔄",
+        duration: 3000,
+      });
+    };
+
+    on<{ userId: string; handle: string; gracePeriod: number }>("player-disconnected", handlePlayerDisconnected);
+    on<{ userId: string; handle: string }>("player-reconnected", handlePlayerReconnected);
+
     return () => {
       off("problem-solved");
       off("problem-not-solved");
       off("error");
+      off("player-disconnected");
+      off("player-reconnected");
     };
   }, [socket, isConnected, on, off, user]);
 
@@ -379,24 +404,22 @@ export default function GamePage() {
   // Handle browser back/forward navigation
   useEffect(() => {
     const handlePopState = () => {
-      // Clean up when navigating away
-      if (!cleanupDoneRef.current && isConnected) {
-        console.log("[GamePage] Browser navigation detected, cleaning up");
-        emit("leave-room", { roomCode });
-        untrackRoom(roomCode);
-        cleanupDoneRef.current = true;
-      }
+      // During active game, don't emit leave-room on browser navigation
+      // Server-side grace period handles disconnects
+      // User can navigate back to /game/CODE to resume
     };
 
     window.addEventListener("popstate", handlePopState);
     return () => {
       window.removeEventListener("popstate", handlePopState);
     };
-  }, [isConnected, emit, roomCode, untrackRoom]);
+  }, []);
   
   // Handle browser beforeunload (tab close, refresh) - show confirmation during active game
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      // Mark that tab is closing so unmount cleanup doesn't emit leave-room
+      isTabClosingRef.current = true;
       // Only show prompt during active game (not ended)
       if (!isGameEnded && isGameActive) {
         e.preventDefault();
@@ -406,23 +429,28 @@ export default function GamePage() {
       }
     };
     
+    // Reset flag if user cancels the close (page regains focus)
+    const handleFocus = () => {
+      isTabClosingRef.current = false;
+    };
+    
     window.addEventListener("beforeunload", handleBeforeUnload);
+    window.addEventListener("focus", handleFocus);
     
     return () => {
       window.removeEventListener("beforeunload", handleBeforeUnload);
+      window.removeEventListener("focus", handleFocus);
     };
   }, [isGameEnded, isGameActive]);
   
-  // Cleanup on unmount - emit leave-room
+  // Cleanup on unmount - server grace period handles tab close/refresh
   useEffect(() => {
     return () => {
-      // Only cleanup if game hasn't ended naturally and we haven't cleaned up yet
-      if (!cleanupDoneRef.current && isConnected) {
-        console.log("[GamePage] Component unmounting, emitting leave-room");
-        emit("leave-room", { roomCode });
-      }
+      // Don't emit leave-room on unmount during game
+      // Server-side disconnect handler with grace period handles tab close/refresh
+      // handleExitGame handles explicit user exit via button
     };
-  }, [isConnected, emit, roomCode]);
+  }, []);
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -500,7 +528,7 @@ export default function GamePage() {
         isConnected={isConnected}
         isReconnecting={isReconnecting}
         reconnectAttempt={reconnectAttempt}
-        maxAttempts={5}
+        maxAttempts={15}
       />
 
       <div className="max-w-6xl mx-auto">

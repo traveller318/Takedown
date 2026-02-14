@@ -55,8 +55,8 @@ export default function RoomPage() {
   const [settings, setSettings] = useState<RoomSettings>({
     minRating: 800,
     maxRating: 1300,
-    questionCount: 3,
-    duration: 30,
+    questionCount: 2,
+    duration: 15,
   });
 
   // Loading states for buttons (prevents double-click)
@@ -69,6 +69,10 @@ export default function RoomPage() {
   const hasJoinedSocketRoom = useRef(false);
   // Track if component is mounted for cleanup safety
   const isMountedRef = useRef(true);
+  // Track if tab is closing (server grace period handles disconnect)
+  const isTabClosingRef = useRef(false);
+  // Track if navigating to game page (don't emit leave-room)
+  const navigatingToGameRef = useRef(false);
 
   const isHost = room && user && room.host._id === user._id;
 
@@ -238,6 +242,7 @@ export default function RoomPage() {
   const handleGameStarting = useCallback((data: { roomCode: string }) => {
     if (data.roomCode !== roomCode) return;
     console.log("[RoomPage] Game starting event received");
+    navigatingToGameRef.current = true;
     setIsStartingGame(true);
     setIsGameStarting(true);
   }, [roomCode, setIsGameStarting]);
@@ -247,18 +252,39 @@ export default function RoomPage() {
     if (!socket || !isConnected) return;
 
     console.log("[RoomPage] Setting up socket event listeners");
+
+    // Player disconnect/reconnect handlers for grace period
+    const handlePlayerDisconnected = (data: { userId: string; handle: string; gracePeriod: number }) => {
+      if (data.handle === user?.handle) return;
+      toast.info(`${data.handle} disconnected. Waiting ${data.gracePeriod}s for reconnect...`, {
+        icon: "⚠️",
+        duration: 5000,
+      });
+    };
+
+    const handlePlayerReconnected = (data: { userId: string; handle: string }) => {
+      if (data.handle === user?.handle) return;
+      toast.success(`${data.handle} reconnected!`, {
+        icon: "🔄",
+        duration: 3000,
+      });
+    };
     
     on<RoomUpdateData>("room-update", handleRoomUpdate);
     on<{ message: string }>("error", handleSocketError);
     on<{ roomCode: string }>("game-starting", handleGameStarting);
+    on<{ userId: string; handle: string; gracePeriod: number }>("player-disconnected", handlePlayerDisconnected);
+    on<{ userId: string; handle: string }>("player-reconnected", handlePlayerReconnected);
 
     return () => {
       console.log("[RoomPage] Cleaning up socket event listeners");
       off("room-update");
       off("error");
       off("game-starting");
+      off("player-disconnected");
+      off("player-reconnected");
     };
-  }, [socket, isConnected, on, off, handleRoomUpdate, handleSocketError, handleGameStarting]);
+  }, [socket, isConnected, on, off, handleRoomUpdate, handleSocketError, handleGameStarting, user?.handle]);
 
   // Join socket room when connected and room is loaded
   useEffect(() => {
@@ -298,7 +324,9 @@ export default function RoomPage() {
   // Handle browser back/forward navigation
   useEffect(() => {
     const handlePopState = () => {
-      // When navigating away, clean up socket room
+      // Don't emit leave-room if tab is closing (grace period handles it)
+      if (isTabClosingRef.current) return;
+      // When navigating away via browser buttons, clean up socket room
       if (hasJoinedSocketRoom.current && socket?.connected) {
         console.log("[RoomPage] Browser navigation detected, cleaning up");
         emit("leave-room", { roomCode });
@@ -313,19 +341,37 @@ export default function RoomPage() {
     };
   }, [socket, emit, roomCode, untrackRoom]);
 
-  // Cleanup on unmount - only emit leave-room if we haven't already left
+  // Cleanup on unmount - only emit leave-room for intentional SPA navigation
   useEffect(() => {
     isMountedRef.current = true;
 
+    // Track tab closing to skip leave-room on unmount
+    const handleBeforeUnload = () => {
+      isTabClosingRef.current = true;
+    };
+    const handleFocus = () => {
+      isTabClosingRef.current = false;
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    window.addEventListener("focus", handleFocus);
+
     return () => {
       isMountedRef.current = false;
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      window.removeEventListener("focus", handleFocus);
       // Untrack room from reconnect tracking
       untrackRoom(roomCode);
       
-      // Only emit leave-room if still considered in the room (e.g., browser close/refresh)
-      // If user clicked Exit button, hasJoinedSocketRoom.current will be false
+      // Don't emit leave-room if:
+      // 1. Tab is closing (server grace period handles disconnect)
+      // 2. Navigating to game page (game is starting)
+      if (isTabClosingRef.current || navigatingToGameRef.current) {
+        return;
+      }
+      
+      // Only emit leave-room for intentional SPA navigation away
       if (hasJoinedSocketRoom.current && socket?.connected) {
-        console.log("[RoomPage] Component unmounting, emitting leave-room");
+        console.log("[RoomPage] Component unmounting (SPA navigation), emitting leave-room");
         emit("leave-room", { roomCode });
         hasJoinedSocketRoom.current = false;
       }
@@ -456,7 +502,7 @@ export default function RoomPage() {
         isConnected={isConnected}
         isReconnecting={isReconnecting}
         reconnectAttempt={reconnectAttempt}
-        maxAttempts={5}
+        maxAttempts={15}
       />
       {/* Game Starting Overlay - Shows for all participants */}
       {(isStartingGame || isGameStarting) && (
@@ -677,48 +723,18 @@ export default function RoomPage() {
                   <label className="block text-sm text-gray-400 mb-2">
                     Number of Questions
                   </label>
-                  <Select
-                    value={settings.questionCount.toString()}
-                    onValueChange={(value) =>
-                      setSettings({ ...settings, questionCount: parseInt(value) })
-                    }
-                    disabled={!isHost}
-                  >
-                    <SelectTrigger className={!isHost ? "opacity-60" : ""}>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {[3, 4, 5, 6, 7, 8, 9, 10].map((count) => (
-                        <SelectItem key={count} value={count.toString()}>
-                          {count}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div className="flex items-center h-10 px-3 rounded-md border border-white/10 bg-white/5 text-gray-300">
+                    2 (Fixed)
+                  </div>
                 </div>
 
                 <div>
                   <label className="block text-sm text-gray-400 mb-2">
                     Duration (minutes)
                   </label>
-                  <Select
-                    value={settings.duration.toString()}
-                    onValueChange={(value) =>
-                      setSettings({ ...settings, duration: parseInt(value) })
-                    }
-                    disabled={!isHost}
-                  >
-                    <SelectTrigger className={!isHost ? "opacity-60" : ""}>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {[15, 30, 45, 60, 90, 120].map((duration) => (
-                        <SelectItem key={duration} value={duration.toString()}>
-                          {duration} min
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div className="flex items-center h-10 px-3 rounded-md border border-white/10 bg-white/5 text-gray-300">
+                    15 min (Fixed)
+                  </div>
                 </div>
               </div>
 

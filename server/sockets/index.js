@@ -12,6 +12,18 @@ const gameController = require('../controllers/gameController');
 // Store active rooms for timer sync
 const activeGameRooms = new Set();
 
+// Track disconnected players with grace period
+// Structure: Map<roomCode, Map<userId, { timeout, handle, disconnectedAt }>>
+const disconnectedPlayers = new Map();
+
+// Track connected sockets per user (for multi-tab detection)
+// Structure: Map<userId, Set<socketId>>
+const userSockets = new Map();
+
+// Grace period durations
+const GRACE_PERIOD_GAME = 60000;  // 60 seconds for active game
+const GRACE_PERIOD_ROOM = 15000;  // 15 seconds for waiting room
+
 // Debug logger with timestamp
 const debug = {
   log: (event, message, data = null) => {
@@ -67,9 +79,77 @@ function initSockets(io) {
     }
   }, 5000);
 
+  /**
+   * Handle grace period expiry - remove player from room after timeout
+   */
+  async function handleGracePeriodExpiry(roomCode, userId, handle) {
+    debug.log('GRACE-PERIOD', 'Grace period expired', { roomCode, userId, handle });
+
+    // Clean up the disconnected players map
+    const roomDisconnected = disconnectedPlayers.get(roomCode);
+    if (roomDisconnected) {
+      roomDisconnected.delete(userId);
+      if (roomDisconnected.size === 0) {
+        disconnectedPlayers.delete(roomCode);
+      }
+    }
+
+    try {
+      const room = await Room.findOne({ code: roomCode });
+      if (!room) {
+        debug.log('GRACE-PERIOD', 'Room already deleted', { roomCode });
+        return;
+      }
+
+      // Check if user is still in participants (might have been removed by explicit leave)
+      const isStillParticipant = room.participants.some(p => p.toString() === userId);
+      if (!isStillParticipant) {
+        debug.log('GRACE-PERIOD', 'User already removed from room', { roomCode, userId });
+        return;
+      }
+
+      // Remove user from participants
+      room.participants = room.participants.filter(p => p.toString() !== userId);
+
+      if (room.participants.length === 0) {
+        debug.log('GRACE-PERIOD', 'Room empty after grace period, cleaning up', { roomCode });
+        await RoomProblem.deleteMany({ roomId: room._id });
+        await Score.deleteMany({ roomId: room._id });
+        await Room.deleteOne({ _id: room._id });
+        activeGameRooms.delete(roomCode);
+        debug.success('GRACE-PERIOD', 'Room cleanup complete', { roomCode });
+      } else {
+        await room.save();
+        await room.populate('participants', 'handle avatar rating');
+
+        const roomUpdate = {
+          roomCode: room.code,
+          participants: room.participants.map(p => ({
+            id: p._id.toString(),
+            handle: p.handle,
+            avatar: p.avatar,
+            rating: p.rating
+          }))
+        };
+
+        io.to(roomCode).emit('room-update', roomUpdate);
+        io.to(roomCode).emit('player-left', { userId, handle });
+        debug.success('GRACE-PERIOD', 'Player removed after grace period', { roomCode, userId, handle });
+      }
+    } catch (error) {
+      debug.error('GRACE-PERIOD', 'Error during grace period expiry', error);
+    }
+  }
+
   io.on('connection', (socket) => {
     // socket.user is already attached by the middleware in utils/socket.js
     socket.userId = socket.user._id.toString();
+
+    // Track this socket for the user (multi-tab detection)
+    if (!userSockets.has(socket.userId)) {
+      userSockets.set(socket.userId, new Set());
+    }
+    userSockets.get(socket.userId).add(socket.id);
     
     debug.success('CONNECTION', `User connected`, {
       userId: socket.userId,
@@ -97,8 +177,26 @@ function initSockets(io) {
         socket.currentRoom = roomCode;
         debug.log('JOIN-ROOM', `Socket joined room channel`, { roomCode, socketId: socket.id });
 
+        // Check if user is reconnecting from a grace period
+        const roomDisconnected = disconnectedPlayers.get(roomCode);
+        if (roomDisconnected && roomDisconnected.has(socket.userId)) {
+          const disconnectedInfo = roomDisconnected.get(socket.userId);
+          clearTimeout(disconnectedInfo.timeout);
+          roomDisconnected.delete(socket.userId);
+          if (roomDisconnected.size === 0) {
+            disconnectedPlayers.delete(roomCode);
+          }
+          debug.success('JOIN-ROOM', 'Player reconnected within grace period', {
+            roomCode, userId: socket.userId, handle: socket.user.handle
+          });
+          io.to(roomCode).emit('player-reconnected', {
+            userId: socket.userId,
+            handle: socket.user.handle
+          });
+        }
+
         // Fetch room and populate participants
-        const room = await Room.findOne({ code: roomCode }).populate('participants', 'handle avatar rating');
+        let room = await Room.findOne({ code: roomCode }).populate('participants', 'handle avatar rating');
         
         if (!room) {
           socket.leave(roomCode);
@@ -111,6 +209,19 @@ function initSockets(io) {
           participantCount: room.participants.length,
           status: room.status 
         });
+
+        // For active games, ensure reconnecting user is in participants
+        if (room.status === 'started') {
+          const isParticipant = room.participants.some(p => p._id.toString() === socket.userId);
+          if (!isParticipant) {
+            await Room.updateOne(
+              { code: roomCode },
+              { $addToSet: { participants: socket.user._id } }
+            );
+            room = await Room.findOne({ code: roomCode }).populate('participants', 'handle avatar rating');
+            debug.log('JOIN-ROOM', 'Re-added reconnecting player to active game', { roomCode, userId: socket.userId });
+          }
+        }
 
         const roomUpdate = {
           roomCode,
@@ -148,6 +259,20 @@ function initSockets(io) {
         socket.leave(roomCode);
         socket.currentRoom = null;
         debug.log('LEAVE-ROOM', `Socket left room channel`, { roomCode, socketId: socket.id });
+
+        // Clear any grace period for this user (explicit leave)
+        const roomDisconnectedLeave = disconnectedPlayers.get(roomCode);
+        if (roomDisconnectedLeave) {
+          const disconnectedInfo = roomDisconnectedLeave.get(socket.userId);
+          if (disconnectedInfo) {
+            clearTimeout(disconnectedInfo.timeout);
+            roomDisconnectedLeave.delete(socket.userId);
+            if (roomDisconnectedLeave.size === 0) {
+              disconnectedPlayers.delete(roomCode);
+            }
+            debug.log('LEAVE-ROOM', 'Cleared grace period for leaving user', { roomCode, userId: socket.userId });
+          }
+        }
 
         // Remove user from participants array
         const room = await Room.findOneAndUpdate(
@@ -361,62 +486,104 @@ function initSockets(io) {
         socketId: socket.id 
       });
 
+      // Remove this socket from user's socket set
+      const userSocketSet = userSockets.get(socket.userId);
+      if (userSocketSet) {
+        userSocketSet.delete(socket.id);
+        if (userSocketSet.size === 0) {
+          userSockets.delete(socket.userId);
+        }
+      }
+
+      // Check if user still has other active sockets (multi-tab)
+      const remainingSockets = userSockets.get(socket.userId);
+      const hasOtherSockets = remainingSockets && remainingSockets.size > 0;
+
+      if (hasOtherSockets) {
+        debug.log('DISCONNECT', 'User still has other active sockets, skipping cleanup', {
+          userId: socket.userId,
+          remainingCount: remainingSockets.size
+        });
+        return;
+      }
+
       try {
         // Find rooms where user is in participants
         const rooms = await Room.find({ participants: socket.user._id });
         debug.log('DISCONNECT', `Found ${rooms.length} rooms with user as participant`);
 
         for (const room of rooms) {
-          debug.log('DISCONNECT', `Processing room`, { roomCode: room.code });
+          debug.log('DISCONNECT', `Processing room`, { roomCode: room.code, status: room.status });
 
-          // Remove user from participants
-          room.participants = room.participants.filter(
-            p => p.toString() !== socket.userId
-          );
+          if (room.status === 'started' || room.status === 'waiting') {
+            // Use grace period - don't remove immediately
+            const gracePeriod = room.status === 'started' ? GRACE_PERIOD_GAME : GRACE_PERIOD_ROOM;
 
-          if (room.participants.length === 0) {
-            debug.log('DISCONNECT', `Room empty, deleting room and related data`, { roomCode: room.code });
-            
-            // Delete room, problems, and scores if no participants left
-            const deletedProblems = await RoomProblem.deleteMany({ roomId: room._id });
-            const deletedScores = await Score.deleteMany({ roomId: room._id });
-            await Room.deleteOne({ _id: room._id });
-            
-            // Remove from active game rooms
-            activeGameRooms.delete(room.code);
-            
-            debug.success('DISCONNECT', `Room cleanup complete`, {
+            if (!disconnectedPlayers.has(room.code)) {
+              disconnectedPlayers.set(room.code, new Map());
+            }
+
+            const roomDisconnected = disconnectedPlayers.get(room.code);
+
+            // Clear any existing grace period for this user
+            if (roomDisconnected.has(socket.userId)) {
+              clearTimeout(roomDisconnected.get(socket.userId).timeout);
+            }
+
+            const timeout = setTimeout(() => {
+              handleGracePeriodExpiry(room.code, socket.userId, socket.user.handle);
+            }, gracePeriod);
+
+            roomDisconnected.set(socket.userId, {
+              timeout,
+              handle: socket.user.handle,
+              disconnectedAt: Date.now()
+            });
+
+            debug.log('DISCONNECT', `Grace period started (${gracePeriod / 1000}s)`, {
               roomCode: room.code,
-              deletedProblems: deletedProblems.deletedCount,
-              deletedScores: deletedScores.deletedCount
+              userId: socket.userId
+            });
+
+            // Notify other players about the temporary disconnect
+            io.to(room.code).emit('player-disconnected', {
+              userId: socket.userId,
+              handle: socket.user.handle,
+              gracePeriod: gracePeriod / 1000
             });
 
           } else {
-            // Save updated room
-            await room.save();
-            debug.log('DISCONNECT', `Updated room participants`, { 
-              roomCode: room.code, 
-              remainingParticipants: room.participants.length 
-            });
+            // Room is ended or other status - remove immediately
+            room.participants = room.participants.filter(
+              p => p.toString() !== socket.userId
+            );
 
-            // Populate participants for room-update
-            await room.populate('participants', 'handle avatar rating');
+            if (room.participants.length === 0) {
+              debug.log('DISCONNECT', `Room empty, deleting room and related data`, { roomCode: room.code });
+              await RoomProblem.deleteMany({ roomId: room._id });
+              await Score.deleteMany({ roomId: room._id });
+              await Room.deleteOne({ _id: room._id });
+              activeGameRooms.delete(room.code);
+              debug.success('DISCONNECT', `Room cleanup complete`, { roomCode: room.code });
+            } else {
+              await room.save();
+              await room.populate('participants', 'handle avatar rating');
 
-            const roomUpdate = {
-              roomCode: room.code,
-              participants: room.participants.map(p => ({
-                id: p._id.toString(),
-                handle: p.handle,
-                avatar: p.avatar,
-                rating: p.rating
-              }))
-            };
+              const roomUpdate = {
+                roomCode: room.code,
+                participants: room.participants.map(p => ({
+                  id: p._id.toString(),
+                  handle: p.handle,
+                  avatar: p.avatar,
+                  rating: p.rating
+                }))
+              };
 
-            // Emit room-update to remaining participants
-            io.to(room.code).emit('room-update', roomUpdate);
-            debug.success('DISCONNECT', `Emitted room-update to remaining participants`, { 
-              roomCode: room.code 
-            });
+              io.to(room.code).emit('room-update', roomUpdate);
+              debug.success('DISCONNECT', `Emitted room-update to remaining participants`, {
+                roomCode: room.code
+              });
+            }
           }
         }
 

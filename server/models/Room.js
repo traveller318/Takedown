@@ -26,11 +26,11 @@ const roomSchema = new mongoose.Schema({
     },
     questionCount: {
       type: Number,
-      default: 5
+      default: 2
     },
     duration: {
       type: Number,
-      default: 30 // minutes
+      default: 15 // minutes
     }
   },
   status: {

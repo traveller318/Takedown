@@ -39,8 +39,8 @@ export function ProblemCard({
     const now = Date.now();
     const elapsedMinutes = Math.floor((now - start) / (1000 * 60));
 
-    // Points decrease by 1 for each minute elapsed, but never below minPoints
-    const points = Math.max(problem.basePoints - elapsedMinutes, problem.minPoints);
+    // Points decrease by 5 for each minute elapsed, but never below minPoints
+    const points = Math.max(problem.basePoints - (elapsedMinutes * 5), problem.minPoints);
     return points;
   }, [startTime, problem.basePoints, problem.minPoints]);
 

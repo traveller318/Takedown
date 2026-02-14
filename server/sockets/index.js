@@ -134,10 +134,64 @@ function initSockets(io) {
 
         io.to(roomCode).emit('room-update', roomUpdate);
         io.to(roomCode).emit('player-left', { userId, handle });
+
+        // Transfer host if the disconnected player was the host of a waiting room
+        await transferHostIfNeeded(room, roomCode, userId, handle);
+
         debug.success('GRACE-PERIOD', 'Player removed after grace period', { roomCode, userId, handle });
       }
     } catch (error) {
       debug.error('GRACE-PERIOD', 'Error during grace period expiry', error);
+    }
+  }
+
+  /**
+   * Transfer host to next participant when current host leaves a waiting room
+   * @param {Object} room - The room document (participants may be populated or ObjectIds)
+   * @param {string} roomCode - The room code
+   * @param {string} leavingUserId - The userId of the leaving host
+   * @param {string} leavingHandle - The handle of the leaving host
+   */
+  async function transferHostIfNeeded(room, roomCode, leavingUserId, leavingHandle) {
+    try {
+      // Only transfer if the leaving user was the host
+      if (room.host.toString() !== leavingUserId) return false;
+      // Only transfer in waiting rooms (before game starts)
+      if (room.status !== 'waiting') return false;
+      // No one to transfer to
+      if (room.participants.length === 0) return false;
+
+      // Get the new host ID (handle both populated and unpopulated participants)
+      const firstParticipant = room.participants[0];
+      const newHostId = firstParticipant._id ? firstParticipant._id : firstParticipant;
+
+      // Update host in database
+      await Room.updateOne({ code: roomCode }, { host: newHostId });
+
+      // Fetch new host user info for the event
+      const newHost = await User.findById(newHostId, 'handle avatar rating');
+      if (newHost) {
+        io.to(roomCode).emit('host-changed', {
+          roomCode,
+          newHost: {
+            _id: newHost._id.toString(),
+            handle: newHost.handle,
+            avatar: newHost.avatar,
+            rating: newHost.rating
+          },
+          previousHost: leavingHandle
+        });
+        debug.success('HOST-TRANSFER', 'Host transferred', {
+          roomCode,
+          from: leavingHandle,
+          to: newHost.handle
+        });
+        return true;
+      }
+      return false;
+    } catch (error) {
+      debug.error('HOST-TRANSFER', 'Error transferring host', error);
+      return false;
     }
   }
 
@@ -291,19 +345,42 @@ function initSockets(io) {
           remainingParticipants: room.participants.length 
         });
 
-        const roomUpdate = {
-          roomCode,
-          participants: room.participants.map(p => ({
-            id: p._id.toString(),
-            handle: p.handle,
-            avatar: p.avatar,
-            rating: p.rating
-          }))
-        };
+        // If room is empty after leave, clean up all associated data
+        if (room.participants.length === 0) {
+          debug.log('LEAVE-ROOM', 'Room empty after leave, cleaning up', { roomCode });
+          await RoomProblem.deleteMany({ roomId: room._id });
+          await Score.deleteMany({ roomId: room._id });
+          await Room.deleteOne({ _id: room._id });
+          activeGameRooms.delete(roomCode);
+          debug.success('LEAVE-ROOM', 'Room cleanup complete', { roomCode });
+        } else {
+          // Transfer host if the leaving user was the host of a waiting room
+          await transferHostIfNeeded(room, roomCode, socket.userId, socket.user.handle);
 
-        // Emit room update to remaining participants
-        io.to(roomCode).emit('room-update', roomUpdate);
-        debug.success('LEAVE-ROOM', `Emitted room-update`, roomUpdate);
+          const roomUpdate = {
+            roomCode,
+            participants: room.participants.map(p => ({
+              id: p._id.toString(),
+              handle: p.handle,
+              avatar: p.avatar,
+              rating: p.rating
+            }))
+          };
+
+          // Emit room update to remaining participants
+          io.to(roomCode).emit('room-update', roomUpdate);
+
+          // Notify remaining participants that this player left
+          io.to(roomCode).emit('player-left', {
+            userId: socket.userId,
+            handle: socket.user.handle
+          });
+
+          debug.success('LEAVE-ROOM', 'Emitted room-update and player-left', {
+            roomCode,
+            leavingUser: socket.user.handle
+          });
+        }
 
       } catch (error) {
         debug.error('LEAVE-ROOM', 'Failed to leave room', error);

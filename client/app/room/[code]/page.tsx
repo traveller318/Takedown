@@ -179,25 +179,12 @@ export default function RoomPage() {
     const currentHandles = new Set(data.participants.map(p => p.handle));
     const previousHandles = previousParticipantsRef.current;
 
-    // Detect who joined
+    // Detect who joined (leave detection is handled by 'player-left' event to avoid duplicates)
     currentHandles.forEach(handle => {
       if (!previousHandles.has(handle) && previousHandles.size > 0) {
         // Don't show toast for the current user
         if (handle !== user?.handle) {
           toast.success(`${handle} joined the room`, {
-            icon: "👋",
-            duration: 3000,
-          });
-        }
-      }
-    });
-
-    // Detect who left
-    previousHandles.forEach(handle => {
-      if (!currentHandles.has(handle)) {
-        // Don't show toast for the current user
-        if (handle !== user?.handle) {
-          toast.info(`${handle} left the room`, {
             icon: "👋",
             duration: 3000,
           });
@@ -269,12 +256,49 @@ export default function RoomPage() {
         duration: 3000,
       });
     };
+
+    // Handle host transfer (when host leaves a waiting room)
+    const handleHostChanged = (data: { roomCode: string; newHost: { _id: string; handle: string; avatar?: string; rating: number }; previousHost: string }) => {
+      if (data.roomCode !== roomCode) return;
+
+      // Update room state with new host
+      setRoom(prevRoom => {
+        if (!prevRoom) return prevRoom;
+        return {
+          ...prevRoom,
+          host: data.newHost,
+        };
+      });
+
+      if (data.newHost._id === user?._id) {
+        toast.success("You are now the host!", {
+          icon: "👑",
+          duration: 5000,
+        });
+      } else {
+        toast.info(`${data.newHost.handle} is now the host`, {
+          icon: "👑",
+          duration: 4000,
+        });
+      }
+    };
+
+    // Handle explicit player-left event (emitted when a player leaves the room)
+    const handlePlayerLeft = (data: { userId: string; handle: string }) => {
+      if (data.handle === user?.handle) return;
+      toast.info(`${data.handle} left the room`, {
+        icon: "🚪",
+        duration: 3000,
+      });
+    };
     
     on<RoomUpdateData>("room-update", handleRoomUpdate);
     on<{ message: string }>("error", handleSocketError);
     on<{ roomCode: string }>("game-starting", handleGameStarting);
     on<{ userId: string; handle: string; gracePeriod: number }>("player-disconnected", handlePlayerDisconnected);
     on<{ userId: string; handle: string }>("player-reconnected", handlePlayerReconnected);
+    on<{ roomCode: string; newHost: { _id: string; handle: string; avatar?: string; rating: number }; previousHost: string }>("host-changed", handleHostChanged);
+    on<{ userId: string; handle: string }>("player-left", handlePlayerLeft);
 
     return () => {
       console.log("[RoomPage] Cleaning up socket event listeners");
@@ -283,6 +307,8 @@ export default function RoomPage() {
       off("game-starting");
       off("player-disconnected");
       off("player-reconnected");
+      off("host-changed");
+      off("player-left");
     };
   }, [socket, isConnected, on, off, handleRoomUpdate, handleSocketError, handleGameStarting, user?.handle]);
 

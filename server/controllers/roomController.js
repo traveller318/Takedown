@@ -151,11 +151,52 @@ const leaveRoom = async (req, res) => {
       return res.status(404).json({ error: 'Room not found' });
     }
 
+    // Get handle of leaving user for notifications
+    const User = require('../models/User');
+    const leavingUser = await User.findById(userId, 'handle');
+    const leavingHandle = leavingUser ? leavingUser.handle : 'Unknown';
+
+    // Check if leaving user is the host (before removing from participants)
+    const wasHost = room.host.toString() === userId.toString();
+
     // Remove user from participants
     room.participants = room.participants.filter(
       (p) => p.toString() !== userId.toString()
     );
     await room.save();
+
+    const io = getIO();
+
+    // If room is empty, clean up all associated data
+    if (room.participants.length === 0) {
+      const RoomProblem = require('../models/RoomProblem');
+      const Score = require('../models/Score');
+      await RoomProblem.deleteMany({ roomId: room._id });
+      await Score.deleteMany({ roomId: room._id });
+      await Room.deleteOne({ _id: room._id });
+      return res.status(200).json({ message: 'Left room successfully' });
+    }
+
+    // Transfer host if the leaving user was the host and room is still waiting
+    if (wasHost && room.status === 'waiting' && room.participants.length > 0) {
+      const newHostId = room.participants[0];
+      room.host = newHostId;
+      await room.save();
+
+      const newHost = await User.findById(newHostId, 'handle avatar rating');
+      if (newHost) {
+        io.to(code).emit('host-changed', {
+          roomCode: code,
+          newHost: {
+            _id: newHost._id.toString(),
+            handle: newHost.handle,
+            avatar: newHost.avatar,
+            rating: newHost.rating
+          },
+          previousHost: leavingHandle
+        });
+      }
+    }
 
     // Populate remaining participants and emit room update
     await room.populate('participants', 'handle avatar rating');
@@ -168,10 +209,15 @@ const leaveRoom = async (req, res) => {
     }));
 
     // Emit socket event for room update to remaining participants
-    const io = getIO();
     io.to(code).emit('room-update', {
       roomCode: code,
       participants
+    });
+
+    // Notify remaining participants that this player left
+    io.to(code).emit('player-left', {
+      userId: userId.toString(),
+      handle: leavingHandle
     });
 
     res.status(200).json({ message: 'Left room successfully' });

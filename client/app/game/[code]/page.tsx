@@ -336,12 +336,24 @@ export default function GamePage() {
     on<{ userId: string; handle: string; gracePeriod: number }>("player-disconnected", handlePlayerDisconnected);
     on<{ userId: string; handle: string }>("player-reconnected", handlePlayerReconnected);
 
+    // Handle explicit player-left event (emitted when a player leaves mid-game)
+    const handlePlayerLeft = (data: { userId: string; handle: string }) => {
+      if (data.userId === user?._id) return;
+      toast.info(`${data.handle} left the game`, {
+        icon: "🚪",
+        duration: 4000,
+      });
+    };
+
+    on<{ userId: string; handle: string }>("player-left", handlePlayerLeft);
+
     return () => {
       off("problem-solved");
       off("problem-not-solved");
       off("error");
       off("player-disconnected");
       off("player-reconnected");
+      off("player-left");
     };
   }, [socket, isConnected, on, off, user]);
 

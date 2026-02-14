@@ -44,6 +44,10 @@ app.use(sessionMiddleware);
 // Initialize Socket.io with session middleware
 const io = initSocket(server, sessionMiddleware);
 
+app.get('/', (req, res) => {
+  res.send('Welcome to the Code Battle Server!');
+});
+
 // Health check route
 app.get('/api/health', healthController.healthCheck);
 

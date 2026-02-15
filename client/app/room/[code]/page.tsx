@@ -568,7 +568,7 @@ export default function RoomPage() {
             <div className="flex items-center gap-4">
               <Flag className="h-6 w-6 text-white" />
               <div>
-                <h1 className="text-2xl font-bold">Codeforces Battle Room</h1>
+                <h1 className="text-2xl font-bold">Battle Room</h1>
                 <div className="flex items-center gap-3 mt-1">
                   <span className="text-gray-400">Room ID:</span>
                   <Badge 
@@ -750,7 +750,7 @@ export default function RoomPage() {
                     Number of Questions
                   </label>
                   <div className="flex items-center h-10 px-3 rounded-md border border-white/10 bg-white/5 text-gray-300">
-                    2 (Fixed)
+                    2
                   </div>
                 </div>
 
@@ -759,7 +759,7 @@ export default function RoomPage() {
                     Duration (minutes)
                   </label>
                   <div className="flex items-center h-10 px-3 rounded-md border border-white/10 bg-white/5 text-gray-300">
-                    15 min (Fixed)
+                    15 min
                   </div>
                 </div>
               </div>

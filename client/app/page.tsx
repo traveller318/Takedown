@@ -1,10 +1,10 @@
-"use client";
+﻿"use client";
 
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
-import Card from "../components/Card";
+import Image from "next/image";
 import { useAuth } from "@/context/AuthContext";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -140,23 +140,51 @@ export default function Home() {
   };
   if (isCreatingRoom) {
     return (
-      <div className="min-h-screen bg-linear-to-br from-black via-neutral-900 to-black text-white flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
+      <div className="h-screen w-screen fixed inset-0 text-white flex items-center justify-center overflow-hidden">
+        <video
+          autoPlay
+          loop
+          muted
+          playsInline
+          className="absolute inset-0 min-w-full min-h-full w-auto h-auto object-cover z-0 scale-105"
+        >
+          <source src="/video.mp4" type="video/mp4" />
+        </video>
+        <div className="absolute inset-0 bg-black/50 z-[1]" />
+        <div className="flex flex-col items-center gap-4 z-10">
           <Loader2 className="h-8 w-8 animate-spin text-white" />
-          <p className="text-gray-400">Creating room and redirecting...</p>
+          <p className="text-gray-300">Creating room and redirecting...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-black via-neutral-900 to-black text-white">
+    <div className="h-screen w-screen fixed inset-0 text-white overflow-hidden">
+      {/* Video Background */}
+      <video
+        autoPlay
+        loop
+        muted
+        playsInline
+        className="absolute inset-0 min-w-full min-h-full w-auto h-auto object-cover z-0 scale-105"
+      >
+        <source src="/video.mp4" type="video/mp4" />
+      </video>
+      {/* Dark overlay for readability */}
+      <div className="absolute inset-0 bg-black/50 z-[1]" />
+
       {/* Header */}
-      <header className="flex items-center justify-between px-6 py-4 md:px-10">
+      <header className="relative z-10 flex items-center justify-between px-6 py-4 md:px-10">
         <div className="w-24" /> {/* Spacer for centering */}
-        <h1 className="text-3xl md:text-4xl font-bold tracking-tight">
-          Takedown
-        </h1>
+        <Image
+          src="/logoimg.png"
+          alt="Takedown"
+          width={500}
+          height={150}
+          className="h-20 md:h-28 w-auto object-contain"
+          priority
+        />
         <div className="w-24 flex justify-end">
           {isLoading ? (
             <div className="flex items-center justify-center">
@@ -186,7 +214,7 @@ export default function Home() {
           ) : (
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
               <DialogTrigger asChild>
-                <button className="px-4 py-2 text-sm font-medium bg-white text-black rounded-lg hover:bg-gray-200 transition-colors">
+                <button className="px-7 py-3 text-sm font-semibold bg-linear-to-b from-[#f5d78e] to-[#d4a843] text-[#3b2409] rounded-xl hover:from-[#f7e0a0] hover:to-[#dcb44e] hover:scale-105 transition-all duration-300 ease-out shadow-[0_2px_10px_rgba(212,168,67,0.3)]">
                   Login
                 </button>
               </DialogTrigger>
@@ -203,12 +231,12 @@ export default function Home() {
                     placeholder="Codeforces username"
                     value={loginHandle}
                     onChange={(e) => setLoginHandle(e.target.value)}
-                    className="bg-white/10 border-white/20 text-white placeholder:text-gray-500 focus-visible:ring-white/30 focus-visible:border-white/40"
+                    className="bg-[#f5d78e]/10 border-[#d4a843]/40 text-white placeholder:text-[#d4a843]/50 rounded-xl focus-visible:ring-[#d4a843]/30 focus-visible:border-[#d4a843]/60"
                     disabled={isLoginLoading}
                   />
                   <Button
                     type="submit"
-                    className="w-full bg-white text-black hover:bg-gray-200"
+                    className="w-full bg-linear-to-b from-[#f5d78e] to-[#d4a843] text-[#3b2409] font-semibold rounded-xl hover:from-[#f7e0a0] hover:to-[#dcb44e] hover:scale-[1.02] transition-all duration-300 ease-out shadow-[0_2px_10px_rgba(212,168,67,0.3)]"
                     disabled={isLoginLoading}
                   >
                     {isLoginLoading ? (
@@ -227,68 +255,106 @@ export default function Home() {
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="flex flex-col items-center px-6 py-12 md:py-20">
-        {/* Room Cards */}
-        <div className="flex flex-col md:flex-row gap-6 w-full max-w-4xl mb-10">
-          {/* Create Room Card */}
-          <Card className="flex-1 p-8 flex flex-col items-center justify-center text-center">
-            <h2 className="text-xl font-semibold mb-4 text-gray-100">
-              Create a Room
-            </h2>
-            <p className="text-gray-400 text-sm mb-6">
-              Start a new coding duel and invite your opponent
-            </p>
-            <button 
-              onClick={handleCreateRoom}
-              disabled={isCreatingRoom}
-              className="w-full px-6 py-3 bg-white text-black font-medium rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isCreatingRoom ? (
-                <span className="flex items-center justify-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Creating...
-                </span>
-              ) : (
-                "Create Room"
-              )}
-            </button>
-          </Card>
+      {/* Shifu - Extreme Left */}
+      <div className="hidden lg:block fixed left-0 top-1/2 -translate-y-1/2 z-[2] pointer-events-none">
+        <Image
+          src="/shifu.png"
+          alt="Shifu"
+          width={550}
+          height={750}
+          className="h-[70vh] max-h-[800px] w-auto object-contain drop-shadow-2xl -translate-x-[13%]"
+          priority
+        />
+      </div>
 
-          {/* Join Room Card */}
-          <Card className="flex-1 p-8 flex flex-col items-center justify-center text-center">
-            <h2 className="text-xl font-semibold mb-4 text-gray-100">
-              Join a Room
-            </h2>
-            <p className="text-gray-400 text-sm mb-6">
-              Enter a room code to join an existing duel
-            </p>
-            <div className="w-full flex flex-col sm:flex-row gap-3">
-              <input
-                type="text"
-                placeholder="Enter room code"
-                value={roomCode}
-                onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
-                onKeyDown={(e) => e.key === "Enter" && handleJoinRoom()}
-                className="flex-1 px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-white/40 transition-colors uppercase"
-                maxLength={6}
-              />
+      {/* Tai Lung - Extreme Right */}
+      <div className="hidden lg:block fixed right-0 top-1/2 -translate-y-1/2 z-[2] pointer-events-none">
+        <Image
+          src="/tailung.png"
+          alt="Tai Lung"(Fixed)
+          width={450}
+          height={650}
+          className="h-[60vh] max-h-[700px] w-auto object-contain drop-shadow-2xl translate-x-[13%]"
+          priority
+        />
+      </div>
+
+      {/* Main Content */}
+      <main className="relative z-10 flex flex-col items-center px-6 py-12 md:py-20">
+        {/* Room Cards */}
+        <div className="flex flex-col md:flex-row gap-6 w-full max-w-3xl mb-10 md:mr-10">
+          {/* Create Room Card */}
+          <div className="flex-1 relative overflow-hidden rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.4)] border border-[#d4a843]/30 group">
+            <div 
+              className="absolute inset-0 bg-cover bg-center opacity-30"
+              style={{ backgroundImage: "url('/doodle.png')" }}
+            />
+            <div className="absolute inset-0 bg-linear-to-b from-[#1a1207]/80 via-[#1a1207]/70 to-[#1a1207]/85" />
+            <div className="relative z-10 p-6 flex flex-col items-center justify-center text-center">
+              <h2 className="text-xl font-semibold mb-4 text-[#f5d78e]">
+                Create a Room
+              </h2>
+              <p className="text-[#d4a843]/70 text-sm mb-6">
+                Start a new coding duel and invite your opponent
+              </p>
               <button 
-                onClick={handleJoinRoom}
-                disabled={isJoiningRoom}
-                className="px-6 py-3 bg-white text-black font-medium rounded-lg hover:bg-gray-200 transition-colors whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={handleCreateRoom}
+                disabled={isCreatingRoom}
+                className="w-full px-6 py-3 bg-linear-to-b from-[#f5d78e] to-[#d4a843] text-[#3b2409] font-semibold rounded-xl hover:from-[#f7e0a0] hover:to-[#dcb44e] hover:scale-[1.02] transition-all duration-300 ease-out shadow-[0_2px_12px_rgba(212,168,67,0.25)] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
               >
-                {isJoiningRoom ? (
+                {isCreatingRoom ? (
                   <span className="flex items-center justify-center gap-2">
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    Joining...
+                    Creating...
                   </span>
                 ) : (
-                  "Join Room"
+                  "Create Room"
                 )}
               </button>
             </div>
-          </Card>
+          </div>
+
+          {/* Join Room Card */}
+          <div className="flex-1 relative overflow-hidden rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.4)] border border-[#d4a843]/30 group">
+            <div 
+              className="absolute inset-0 bg-cover bg-center opacity-30"
+              style={{ backgroundImage: "url('/doodle.png')" }}
+            />
+            <div className="absolute inset-0 bg-linear-to-b from-[#1a1207]/80 via-[#1a1207]/70 to-[#1a1207]/85" />
+            <div className="relative z-10 p-6 flex flex-col items-center justify-center text-center">
+              <h2 className="text-xl font-semibold mb-4 text-[#f5d78e]">
+                Join a Room
+              </h2>
+              <p className="text-[#d4a843]/70 text-sm mb-6">
+                Enter a room code to join an existing duel
+              </p>
+              <div className="w-full flex flex-col gap-3">
+                <input
+                  type="text"
+                  placeholder="Enter room code"
+                  value={roomCode}
+                  onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
+                  onKeyDown={(e) => e.key === "Enter" && handleJoinRoom()}
+                  className="w-full px-4 py-3 bg-[#f5d78e]/10 border border-[#d4a843]/30 rounded-xl text-[#f5d78e] placeholder-[#d4a843]/40 focus:outline-none focus:border-[#d4a843]/60 focus:shadow-[0_0_8px_rgba(212,168,67,0.15)] transition-all duration-300 uppercase"
+                  maxLength={6}
+                />
+                <button 
+                  onClick={handleJoinRoom}
+                  disabled={isJoiningRoom}
+                  className="w-full px-6 py-3 bg-linear-to-b from-[#f5d78e] to-[#d4a843] text-[#3b2409] font-semibold rounded-xl hover:from-[#f7e0a0] hover:to-[#dcb44e] hover:scale-[1.02] transition-all duration-300 ease-out shadow-[0_2px_12px_rgba(212,168,67,0.25)] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+                >
+                  {isJoiningRoom ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Joining...
+                    </span>
+                  ) : (
+                    "Join Room"
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
 
         

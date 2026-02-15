@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Clock } from "lucide-react";
 import { useSocket } from "@/hooks/useSocket";
 
 interface GameTimerProps {
@@ -55,7 +54,6 @@ export function GameTimer({ startTime, duration, onTimeUp }: GameTimerProps) {
 
     const handleTimerSync = (data: TimerSyncData) => {
       console.log("[GameTimer] Timer sync received:", data);
-      // Sync with server time if there's significant drift (> 2 seconds)
       const calculatedRemaining = calculateTimeRemaining();
       const drift = Math.abs(calculatedRemaining - data.remainingSeconds);
       
@@ -79,31 +77,28 @@ export function GameTimer({ startTime, duration, onTimeUp }: GameTimerProps) {
     return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
   };
 
-  // Determine color based on time remaining
+  const isUrgent = timeRemaining < 60;
+  const isWarning = timeRemaining < 300 && !isUrgent;
+
   const getTimerColor = () => {
-    if (timeRemaining < 60) return "text-red-500"; // < 1 minute - red
-    if (timeRemaining < 300) return "text-yellow-400"; // < 5 minutes - yellow
-    return "text-white"; // normal
-  };
-
-  const getBorderColor = () => {
-    if (timeRemaining < 60) return "border-red-500/50";
-    if (timeRemaining < 300) return "border-yellow-400/50";
-    return "border-white/10";
-  };
-
-  const getBackgroundColor = () => {
-    if (timeRemaining < 60) return "bg-red-500/10";
-    if (timeRemaining < 300) return "bg-yellow-400/10";
-    return "bg-white/5";
+    if (isUrgent) return "text-red-700";
+    if (isWarning) return "text-orange-700";
+    return "text-pink-800";
   };
 
   return (
     <div
-      className={`flex items-center gap-3 ${getBackgroundColor()} border ${getBorderColor()} rounded-xl px-6 py-3 transition-colors duration-300`}
+      className={`relative flex items-center gap-3 px-5 py-2.5 rounded-lg transition-all duration-300
+        ${isUrgent 
+          ? "bg-red-100/70 border-2 border-red-400/70 shadow-[0_0_20px_rgba(239,68,68,0.3)]" 
+          : isWarning 
+            ? "bg-orange-100/60 border-2 border-orange-400/50" 
+            : "bg-pink-100/60 border-2 border-pink-300/60"
+        }
+      `}
     >
-      <Clock className={`h-5 w-5 ${timeRemaining < 300 ? getTimerColor() : "text-gray-400"}`} />
-      <span className={`text-2xl font-mono font-bold ${getTimerColor()} transition-colors duration-300`}>
+      <div className={`w-3 h-3 rounded-full ${isUrgent ? "bg-red-500 animate-pulse" : isWarning ? "bg-orange-500" : "bg-pink-500"}`} />
+      <span className={`text-2xl font-kungfu tracking-widest ${getTimerColor()} transition-colors duration-300`}>
         {formatTime(timeRemaining)}
       </span>
     </div>

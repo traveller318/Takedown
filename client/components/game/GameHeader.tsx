@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Swords, LogOut } from "lucide-react";
+import { LogOut } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -44,7 +44,6 @@ export function GameHeader({
   const [isExiting, setIsExiting] = useState(false);
 
   const handleExitClick = () => {
-    // If game has ended, just exit without confirmation
     if (isGameEnded) {
       handleConfirmExit();
       return;
@@ -55,16 +54,11 @@ export function GameHeader({
   const handleConfirmExit = async () => {
     setIsExiting(true);
     try {
-      // Use the onExit callback if provided (handles cleanup)
       if (onExit) {
         onExit();
       } else {
-        // Fallback: Notify server about leaving using correct event name
         emit("leave-room", { roomCode });
-        
-        // Clear game state
         clearGame();
-        
         toast.info("You have left the game");
         router.push("/");
       }
@@ -83,34 +77,36 @@ export function GameHeader({
 
   return (
     <>
-      <div className="bg-white/5 backdrop-blur border border-white/10 rounded-2xl p-6 mb-6">
+      {/* Light themed header */}
+      <div className="kfp-panel mb-6">
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
-            <Swords className="h-6 w-6 text-white" />
+            {/* Cherry blossom icon */}
+            <span className="text-3xl">🌸</span>
             <div>
-              <h1 className="text-2xl font-bold">
+              <h1 className="text-2xl md:text-3xl font-kungfu tracking-wider text-pink-800 drop-shadow-sm">
                 {isGameEnded ? "Battle Ended" : "Battle in Progress"}
               </h1>
               <div className="flex items-center gap-3 mt-1">
-                <span className="text-gray-400">Room:</span>
+                <span className="text-pink-600/70 font-kungfu text-sm tracking-wide">Room:</span>
                 <Badge
                   variant="secondary"
-                  className="bg-neutral-800 text-white font-mono text-sm px-3 py-1"
+                  className="bg-white/60 text-pink-800 font-kungfu text-sm px-3 py-1 border border-pink-300/50"
                 >
                   {roomCode}
                 </Badge>
                 {/* Connection Status */}
                 <div
-                  className={`flex items-center gap-1 ${
-                    isConnected ? "text-green-400" : "text-yellow-400"
+                  className={`flex items-center gap-1.5 ${
+                    isConnected ? "text-green-600" : "text-yellow-600"
                   }`}
                 >
                   <div
                     className={`h-2 w-2 rounded-full ${
-                      isConnected ? "bg-green-400" : "bg-yellow-400 animate-pulse"
+                      isConnected ? "bg-green-500 shadow-[0_0_6px_rgba(34,197,94,0.6)]" : "bg-yellow-500 animate-pulse"
                     }`}
                   />
-                  <span className="text-xs">
+                  <span className="text-xs font-kungfu tracking-wide">
                     {isConnected ? "Live" : "Connecting..."}
                   </span>
                 </div>
@@ -121,8 +117,8 @@ export function GameHeader({
           <div className="flex items-center gap-4">
             {/* Timer or Game Ended Badge */}
             {isGameEnded ? (
-              <div className="flex items-center gap-3 bg-red-500/10 border border-red-500/50 rounded-xl px-6 py-3">
-                <span className="text-2xl font-mono font-bold text-red-400">
+              <div className="flex items-center gap-3 bg-red-100/60 border-2 border-red-300/60 rounded-lg px-5 py-2.5">
+                <span className="text-2xl font-kungfu tracking-wider text-red-700">
                   Game Ended
                 </span>
               </div>
@@ -135,28 +131,28 @@ export function GameHeader({
             )}
 
             {/* Exit Button */}
-            <Button
-              variant="outline"
-              size="sm"
+            <button
               onClick={handleExitClick}
-              className={isGameEnded 
-                ? "border-white/30 text-white hover:bg-white/10"
-                : "border-red-500/30 text-red-400 hover:bg-red-500/10 hover:text-red-300 hover:border-red-500/50"
-              }
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-kungfu tracking-wide text-sm transition-all duration-200
+                ${isGameEnded 
+                  ? "bg-pink-200/60 border-2 border-pink-300/50 text-pink-800 hover:bg-pink-300/60"
+                  : "bg-red-100/60 border-2 border-red-300/50 text-red-700 hover:bg-red-200/60 hover:border-red-400/60"
+                }
+              `}
             >
-              <LogOut className="h-4 w-4 mr-2" />
+              <LogOut className="h-4 w-4" />
               {isGameEnded ? "Leave" : "Exit"}
-            </Button>
+            </button>
           </div>
         </div>
       </div>
 
       {/* Exit Confirmation Dialog */}
       <Dialog open={showExitDialog} onOpenChange={setShowExitDialog}>
-        <DialogContent className="bg-neutral-900 border-white/10 text-white">
+        <DialogContent className="bg-white/95 border-2 border-pink-300/60 text-pink-900 shadow-[0_0_40px_rgba(255,182,193,0.3)]">
           <DialogHeader>
-            <DialogTitle className="text-xl">Leave Game?</DialogTitle>
-            <DialogDescription className="text-gray-400">
+            <DialogTitle className="text-xl font-kungfu tracking-wide text-pink-800">Leave Battle?</DialogTitle>
+            <DialogDescription className="text-pink-700/70">
               Are you sure you want to leave this game? Your progress will be lost and you won&apos;t be able to rejoin.
             </DialogDescription>
           </DialogHeader>
@@ -164,7 +160,7 @@ export function GameHeader({
             <Button
               variant="outline"
               onClick={handleCancelExit}
-              className="border-white/20 text-gray-300 hover:bg-white/10"
+              className="border-pink-300/50 text-pink-700 hover:bg-pink-100/30 bg-transparent font-kungfu"
             >
               Cancel
             </Button>
@@ -172,7 +168,7 @@ export function GameHeader({
               variant="destructive"
               onClick={handleConfirmExit}
               disabled={isExiting}
-              className="bg-red-600 hover:bg-red-700"
+              className="bg-red-600 hover:bg-red-700 border border-red-500 font-kungfu"
             >
               {isExiting ? "Leaving..." : "Leave Game"}
             </Button>

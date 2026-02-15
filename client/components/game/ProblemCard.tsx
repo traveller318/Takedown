@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { ExternalLink, CheckCircle2, Loader2 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { Problem } from "@/types";
 
@@ -39,22 +38,19 @@ export function ProblemCard({
     const now = Date.now();
     const elapsedMinutes = Math.floor((now - start) / (1000 * 60));
 
-    // Points decrease by 5 for each minute elapsed, but never below minPoints
     const points = Math.max(problem.basePoints - (elapsedMinutes * 5), problem.minPoints);
     return points;
   }, [startTime, problem.basePoints, problem.minPoints]);
 
   // Update points every second to catch minute changes accurately
   useEffect(() => {
-    if (isSolved) return; // Don't update if already solved
+    if (isSolved) return;
 
-    // Initial calculation
     setCurrentPoints(calculateCurrentPoints());
 
-    // Update every second to catch minute boundaries accurately
     const interval = setInterval(() => {
       setCurrentPoints(calculateCurrentPoints());
-    }, 1000); // Every second
+    }, 1000);
 
     return () => clearInterval(interval);
   }, [calculateCurrentPoints, isSolved]);
@@ -65,51 +61,41 @@ export function ProblemCard({
     window.open(url, "_blank");
   };
 
-  // Get rating color based on Codeforces rating scale
-  const getRatingColor = (rating: number) => {
-    if (rating < 1200) return "bg-gray-500";
-    if (rating < 1400) return "bg-green-500";
-    if (rating < 1600) return "bg-cyan-500";
-    if (rating < 1900) return "bg-blue-500";
-    if (rating < 2100) return "bg-violet-500";
-    if (rating < 2400) return "bg-orange-500";
-    return "bg-red-500";
-  };
-
   return (
     <div
-      className={`relative rounded-xl border p-5 transition-all duration-300 ${
+      className={`kfp-card relative transition-all duration-300 ${
         isSolved
-          ? "bg-green-500/10 border-green-500/30 shadow-lg shadow-green-500/5"
-          : "bg-white/5 border-white/10 hover:bg-white/8 hover:border-white/20"
+          ? "ring-2 ring-green-500/40 shadow-[0_0_20px_rgba(34,197,94,0.15)]"
+          : "hover:shadow-[0_0_25px_rgba(255,182,193,0.3)]"
       }`}
     >
-      {/* Solved checkmark overlay */}
+      {/* Solved Banner */}
       {isSolved && (
-        <div className="absolute top-3 right-3">
-          <div className="flex items-center gap-1.5 text-green-400">
-            <CheckCircle2 className="h-5 w-5" />
-            <span className="text-sm font-medium">Solved</span>
+        <div className="absolute top-3 right-3 flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 bg-green-100/70 border border-green-500/40 rounded-md px-2.5 py-1">
+            <CheckCircle2 className="h-4 w-4 text-green-600" />
+            <span className="text-sm font-kungfu tracking-wide text-green-700">Solved</span>
           </div>
         </div>
       )}
 
-      {/* Problem number */}
+      {/* Problem content */}
       <div className="flex items-start gap-4">
+        {/* Problem number - ornate circle */}
         <div
-          className={`flex items-center justify-center w-10 h-10 rounded-lg font-bold text-lg ${
+          className={`flex items-center justify-center w-12 h-12 rounded-full font-kungfu text-xl border-2 ${
             isSolved
-              ? "bg-green-500/20 text-green-400"
-              : "bg-white/10 text-white"
+              ? "bg-green-100/60 border-green-500/50 text-green-700"
+              : "bg-pink-100/50 border-pink-400/60 text-pink-800"
           }`}
         >
           {index + 1}
         </div>
 
         <div className="flex-1 min-w-0">
-          {/* Problem ID and Rating */}
+          {/* Problem ID */}
           <div className="flex items-center gap-3 mb-3">
-            <span className="font-mono text-lg font-semibold text-white">
+            <span className="font-kungfu text-xl tracking-wide text-pink-800">
               {problem.contestId}{problem.index}
             </span> 
           </div>
@@ -118,41 +104,38 @@ export function ProblemCard({
           <div className="mb-4">
             {isSolved ? (
               <div className="flex items-center gap-2">
-                <span className="text-green-400 font-bold text-xl">
+                <span className="text-green-700 font-kungfu text-2xl tracking-wide">
                   +{earnedPoints || currentPoints}
                 </span>
-                <span className="text-gray-400 text-sm">points earned</span>
+                <span className="text-pink-600/60 text-sm font-kungfu">points earned</span>
               </div>
             ) : (
               <div className="flex items-center gap-2">
-                <span className="text-white font-bold text-xl">{currentPoints}</span>
-                <span className="text-gray-400 text-sm">points</span>
+                <span className="text-pink-800 font-kungfu text-2xl tracking-wide">{currentPoints}</span>
+                <span className="text-pink-600/60 text-sm font-kungfu">points</span>
               </div>
             )}
           </div>
 
           {/* Action buttons */}
           <div className="flex items-center gap-3">
-            <Button
-              size="sm"
-              variant="outline"
+            <button
               onClick={openProblem}
-              className="border-white/20 text-gray-300 hover:bg-white/10 hover:text-white"
+              className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-pink-100/60 border border-pink-400/50 text-pink-800 text-sm font-kungfu tracking-wide hover:bg-pink-200/60 transition-colors"
             >
-              <ExternalLink className="h-4 w-4 mr-2" />
+              <ExternalLink className="h-4 w-4" />
               Open Problem
-            </Button>
+            </button>
 
             {!isSolved && (
-              <Button
-                size="sm"
+              <button
                 onClick={() => onCheck(problem)}
                 disabled={isChecking || !isConnected || isGameEnded}
-                className="bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50"
+                className="flex items-center gap-2 px-4 py-1.5 rounded-md bg-green-600/80 border border-green-600/50 text-white text-sm font-kungfu tracking-wide hover:bg-green-700/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isChecking ? (
                   <>
-                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    <Loader2 className="h-4 w-4 animate-spin" />
                     Checking...
                   </>
                 ) : isGameEnded ? (
@@ -160,7 +143,7 @@ export function ProblemCard({
                 ) : (
                   "Check"
                 )}
-              </Button>
+              </button>
             )}
           </div>
         </div>

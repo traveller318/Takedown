@@ -271,7 +271,7 @@ export default function Home() {
       <div className="hidden lg:block fixed right-0 top-1/2 -translate-y-1/2 z-[2] pointer-events-none">
         <Image
           src="/tailung.png"
-          alt="Tai Lung"(Fixed)
+          alt="Tai Lung"
           width={450}
           height={650}
           className="h-[60vh] max-h-[700px] w-auto object-contain drop-shadow-2xl translate-x-[13%]"

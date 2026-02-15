@@ -28,9 +28,9 @@ export function ProblemsList({
 }: ProblemsListProps) {
   if (!problems || problems.length === 0) {
     return (
-      <div className="bg-white/5 backdrop-blur border border-white/10 rounded-2xl p-12 text-center">
-        <div className="text-gray-400">
-          <p className="text-lg">No problems available</p>
+      <div className="kfp-panel p-12 text-center">
+        <div className="text-pink-600/60">
+          <p className="text-lg font-kungfu tracking-wide">No problems available</p>
           <p className="text-sm mt-1">Problems will appear here once the game starts</p>
         </div>
       </div>
@@ -39,17 +39,20 @@ export function ProblemsList({
 
   return (
     <div className="space-y-4">
-      <div className="bg-white/5 backdrop-blur border border-white/10 rounded-2xl p-6">
+      <div className="kfp-panel">
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-semibold text-white">Contest Problems</h2>
-          <div className="flex items-center gap-4 text-sm text-gray-400">
+          <h2 className="text-xl font-kungfu tracking-wider text-pink-800 flex items-center gap-2">
+            <span className="text-2xl">🌸</span>
+            Contest Problems
+          </h2>
+          <div className="flex items-center gap-4 text-sm font-kungfu tracking-wide text-pink-600/70">
             <span>
-              Solved: {solvedProblems.size} / {problems.length}
+              Solved: <span className="text-green-700">{solvedProblems.size}</span> / {problems.length}
             </span>
-            <span>•</span>
+            <span className="text-pink-400">•</span>
             <span>
               Total Points:{" "}
-              <span className="text-green-400 font-semibold">
+              <span className="text-green-700 font-semibold">
                 {Array.from(solvedProblems.values()).reduce(
                   (sum, info) => sum + info.points,
                   0

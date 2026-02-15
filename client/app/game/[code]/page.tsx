@@ -5,16 +5,13 @@ import { useParams, useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
   Loader2,
-  CheckCircle2,
   Swords,
-  Star,
   Trophy,
   Home,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useGame } from "@/context/GameContext";
 import { useSocket } from "@/hooks/useSocket";
-import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -483,18 +480,19 @@ export default function GamePage() {
   // Loading state
   if (authLoading || isLoadingState || (!isGameActive && displayProblems.length === 0)) {
     return (
-      <div className="min-h-screen bg-linear-to-br from-black via-neutral-900 to-black flex items-center justify-center">
-        <div className="flex flex-col items-center gap-6">
+      <div className="min-h-screen bg-cover bg-center bg-no-repeat flex items-center justify-center" style={{ backgroundImage: "url('/gamebackground.png')" }}>
+        <div className="absolute inset-0 bg-black/40" />
+        <div className="relative flex flex-col items-center gap-6">
           <div className="relative">
-            <div className="absolute inset-0 rounded-full bg-white/10 animate-ping" />
-            <div className="relative bg-white/5 backdrop-blur border border-white/10 rounded-full p-6">
-              <Swords className="h-12 w-12 text-white animate-pulse" />
+            <div className="absolute inset-0 rounded-full bg-amber-500/20 animate-ping" />
+            <div className="relative bg-black/40 backdrop-blur border-2 border-amber-600/50 rounded-full p-6">
+              <Swords className="h-12 w-12 text-amber-200 animate-pulse" />
             </div>
           </div>
-          <Loader2 className="h-8 w-8 animate-spin text-white" />
+          <Loader2 className="h-8 w-8 animate-spin text-amber-300" />
           <div className="text-center">
-            <h2 className="text-2xl font-bold text-white mb-2">Loading Game...</h2>
-            <p className="text-gray-400">Setting up your battle arena</p>
+            <h2 className="text-3xl font-kungfu tracking-wider text-amber-100 mb-2 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">Loading Battle...</h2>
+            <p className="text-amber-300/70 font-kungfu tracking-wide">Preparing the arena</p>
           </div>
         </div>
       </div>
@@ -504,28 +502,28 @@ export default function GamePage() {
   // Error state
   if (fetchError) {
     return (
-      <div className="min-h-screen bg-linear-to-br from-black via-neutral-900 to-black flex items-center justify-center">
-        <div className="flex flex-col items-center gap-6 text-center">
-          <div className="bg-red-500/10 border border-red-500/30 rounded-full p-6">
-            <Swords className="h-12 w-12 text-red-400" />
+      <div className="min-h-screen bg-cover bg-center bg-no-repeat flex items-center justify-center" style={{ backgroundImage: "url('/gamebackground.png')" }}>
+        <div className="absolute inset-0 bg-white/40" />
+        <div className="relative flex flex-col items-center gap-6 text-center">
+          <div className="bg-red-100/60 border-2 border-red-400/50 rounded-full p-6">
+            <Swords className="h-12 w-12 text-red-600" />
           </div>
           <div>
-            <h2 className="text-2xl font-bold text-white mb-2">Failed to Load Game</h2>
-            <p className="text-gray-400 mb-4">{fetchError}</p>
+            <h2 className="text-2xl font-kungfu tracking-wider text-pink-900 mb-2">Failed to Load Battle</h2>
+            <p className="text-pink-700/60 mb-4">{fetchError}</p>
             <div className="flex gap-3 justify-center">
-              <Button
+              <button
                 onClick={() => window.location.reload()}
-                className="bg-white hover:bg-gray-200 text-black"
+                className="px-6 py-2 bg-pink-300/70 border-2 border-pink-400/50 rounded-lg text-pink-900 font-kungfu tracking-wide hover:bg-pink-400/70 transition-colors"
               >
                 Try Again
-              </Button>
-              <Button
-                variant="outline"
+              </button>
+              <button
                 onClick={() => router.push("/")}
-                className="border-white/20 text-gray-300 hover:bg-white/10"
+                className="px-6 py-2 bg-white/60 border-2 border-pink-300/40 rounded-lg text-pink-700 font-kungfu tracking-wide hover:bg-white/80 transition-colors"
               >
                 Go Home
-              </Button>
+              </button>
             </div>
           </div>
         </div>
@@ -534,68 +532,102 @@ export default function GamePage() {
   }
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-black via-neutral-900 to-black text-white p-6">
-      {/* Reconnecting Banner */}
-      <ReconnectingBanner
-        isConnected={isConnected}
-        isReconnecting={isReconnecting}
-        reconnectAttempt={reconnectAttempt}
-        maxAttempts={15}
-      />
-
-      <div className="max-w-6xl mx-auto">
-        {/* Header with Timer and Exit */}
-        <GameHeader
-          roomCode={roomCode}
-          startTime={startTime}
-          duration={duration}
+    <div className="min-h-screen bg-cover bg-center bg-no-repeat bg-fixed text-white relative" style={{ backgroundImage: "url('/gamebackground.png')" }}>
+      {/* Dark overlay for readability */}
+      <div className="fixed inset-0 bg-black/30 pointer-events-none" />
+      
+      {/* Content */}
+      <div className="relative z-10 p-4 md:p-6">
+        {/* Reconnecting Banner */}
+        <ReconnectingBanner
           isConnected={isConnected}
-          isGameEnded={isGameEnded}
-          onTimeUp={handleTimeUp}
-          onExit={handleExitGame}
+          isReconnecting={isReconnecting}
+          reconnectAttempt={reconnectAttempt}
+          maxAttempts={15}
         />
 
-        {/* Tab Buttons */}
-        <div className="flex items-center justify-center gap-2 mb-6">
-          <Button
-            variant={activeTab === "problems" ? "secondary" : "outline"}
-            onClick={() => setActiveTab("problems")}
-            className={`px-6 ${
-              activeTab === "problems"
-                ? "bg-white/10 text-white border-white/20"
-                : "bg-transparent border-white/20 text-gray-400 hover:text-white hover:bg-white/5"
-            }`}
-          >
-            Problems
-          </Button>
-          <Button
-            variant={activeTab === "leaderboard" ? "secondary" : "outline"}
-            onClick={() => setActiveTab("leaderboard")}
-            className={`px-6 ${
-              activeTab === "leaderboard"
-                ? "bg-white/10 text-white border-white/20"
-                : "bg-transparent border-white/20 text-gray-400 hover:text-white hover:bg-white/5"
-            }`}
-          >
-            Leaderboard
-          </Button>
-        </div>
+        <div className="max-w-6xl mx-auto">
+          {/* Header with Timer and Exit */}
+          <GameHeader
+            roomCode={roomCode}
+            startTime={startTime}
+            duration={duration}
+            isConnected={isConnected}
+            isGameEnded={isGameEnded}
+            onTimeUp={handleTimeUp}
+            onExit={handleExitGame}
+          />
 
-        {/* Main Content */}
-        <div className="space-y-6">
+          {/* Tab Buttons */}
+          <div className="flex items-center justify-center gap-3 mb-6">
+            <button
+              onClick={() => setActiveTab("problems")}
+              className={`px-8 py-2 rounded-lg font-kungfu tracking-wider text-lg transition-all duration-200 border-2 ${
+                activeTab === "problems"
+                  ? "bg-pink-300/60 border-pink-400/60 text-pink-900 shadow-[0_0_15px_rgba(255,182,193,0.3)]"
+                  : "bg-white/20 border-pink-300/30 text-pink-700/60 hover:text-pink-800 hover:bg-white/30 hover:border-pink-400/40"
+              }`}
+            >
+              Problems
+            </button>
+            <button
+              onClick={() => setActiveTab("leaderboard")}
+              className={`px-8 py-2 rounded-lg font-kungfu tracking-wider text-lg transition-all duration-200 border-2 ${
+                activeTab === "leaderboard"
+                  ? "bg-pink-300/60 border-pink-400/60 text-pink-900 shadow-[0_0_15px_rgba(255,182,193,0.3)]"
+                  : "bg-white/20 border-pink-300/30 text-pink-700/60 hover:text-pink-800 hover:bg-white/30 hover:border-pink-400/40"
+              }`}
+            >
+              Leaderboard
+            </button>
+          </div>
+
+          {/* Main Content - 2 Column Layout */}
           {activeTab === "problems" ? (
-            /* Problems List */
-            <ProblemsList
-              problems={displayProblems}
-              solvedProblems={solvedProblems}
-              checkingProblem={checkingProblem}
-              isConnected={isConnected}
-              isGameEnded={isGameEnded}
-              startTime={startTime}
-              onCheckProblem={handleCheckProblem}
-            />
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Problems List - Left Side (2/3 width) */}
+              <div className="lg:col-span-2">
+                <ProblemsList
+                  problems={displayProblems}
+                  solvedProblems={solvedProblems}
+                  checkingProblem={checkingProblem}
+                  isConnected={isConnected}
+                  isGameEnded={isGameEnded}
+                  startTime={startTime}
+                  onCheckProblem={handleCheckProblem}
+                />
+              </div>
+
+              {/* Instructions - Right Side (1/3 width) */}
+              <div className="lg:col-span-1">
+                <div className="kfp-panel sticky top-6">
+                  <h3 className="text-lg font-kungfu tracking-wider mb-4 flex items-center gap-2 text-pink-700">
+                    <span className="text-xl">⭐</span>
+                    Instructions
+                  </h3>
+                  <div className="space-y-3 text-pink-800/80">
+                    <div className="flex items-start gap-3">
+                      <span className="text-green-600 mt-0.5">✓</span>
+                      <p className="font-kungfu tracking-wide text-sm">Click <span className="text-pink-900 font-semibold">Check</span> once you see accepted submission on CF.</p>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <span className="text-pink-400 mt-1">•</span>
+                      <p className="font-kungfu tracking-wide text-sm">Points are calculated based on time your solution was accepted.</p>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <span className="text-pink-400 mt-1">•</span>
+                      <p className="font-kungfu tracking-wide text-sm">No negative points for wrong submissions.</p>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <span className="text-green-600 mt-0.5">✓</span>
+                      <p className="font-kungfu tracking-wide text-sm">You can check your progress on the leaderboard, updates every minute.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           ) : (
-            /* Leaderboard */
+            /* Leaderboard - Full Width */
             <Leaderboard
               leaderboard={leaderboard}
               problems={displayProblems}
@@ -603,52 +635,22 @@ export default function GamePage() {
               startTime={startTime}
             />
           )}
-
-          {/* Instructions Card */}
-          <div className="bg-white/5 backdrop-blur border border-white/10 rounded-2xl p-6">
-            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-              <Star className="h-5 w-5 text-yellow-400" />
-              Instructions
-            </h3>
-            <div className="space-y-3 text-gray-300">
-              <div className="flex items-start gap-3">
-                <CheckCircle2 className="h-5 w-5 text-green-400 mt-0.5 shrink-0" />
-                <p>Click <span className="font-semibold text-white">Check</span> once you see accepted submission on CF.</p>
-              </div>
-              <div className="flex items-start gap-3">
-                <div className="h-5 w-5 flex items-center justify-center mt-0.5 shrink-0">
-                  <div className="h-2 w-2 bg-gray-500 rounded-sm" />
-                </div>
-                <p>Points are calculated based on time your solution was accepted.</p>
-              </div>
-              <div className="flex items-start gap-3">
-                <div className="h-5 w-5 flex items-center justify-center mt-0.5 shrink-0">
-                  <div className="h-2 w-2 bg-gray-500 rounded-sm" />
-                </div>
-                <p>No negative points for wrong submissions.</p>
-              </div>
-              <div className="flex items-start gap-3">
-                <CheckCircle2 className="h-5 w-5 text-green-400 mt-0.5 shrink-0" />
-                <p>You can check your progress on the leaderboard, updates every minute.</p>
-              </div>
-            </div>
-          </div>
         </div>
       </div>
 
       {/* Game Over Dialog */}
       <Dialog open={showGameOverDialog} onOpenChange={setShowGameOverDialog}>
-        <DialogContent className="sm:max-w-2xl bg-neutral-900 border-white/10 text-white max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-2xl bg-white/95 border-2 border-pink-400/50 text-pink-900 max-h-[90vh] overflow-y-auto shadow-[0_0_60px_rgba(255,182,193,0.4)]">
           <DialogHeader className="text-center">
             <div className="flex justify-center mb-4">
-              <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-full p-4">
-                <Trophy className="h-12 w-12 text-yellow-400" />
+              <div className="bg-yellow-100/60 border-2 border-yellow-500/40 rounded-full p-4">
+                <Trophy className="h-12 w-12 text-yellow-600" />
               </div>
             </div>
-            <DialogTitle className="text-3xl font-bold text-center">
+            <DialogTitle className="text-4xl font-kungfu tracking-wider text-center text-pink-800">
               Game Over!
             </DialogTitle>
-            <DialogDescription className="text-gray-400 text-center text-lg">
+            <DialogDescription className="text-pink-600/70 text-center text-lg font-kungfu tracking-wide">
               Time&apos;s up! Here are the final results.
             </DialogDescription>
           </DialogHeader>
@@ -664,13 +666,13 @@ export default function GamePage() {
           </div>
 
           <DialogFooter className="mt-6 sm:justify-center">
-            <Button
+            <button
               onClick={handleReturnHome}
-              className="bg-white hover:bg-gray-200 text-black font-medium px-8 py-3"
+              className="flex items-center gap-2 px-8 py-3 bg-pink-300/70 border-2 border-pink-400/50 rounded-lg text-pink-900 font-kungfu tracking-wider hover:bg-pink-400/70 transition-colors shadow-[0_0_20px_rgba(255,182,193,0.3)]"
             >
-              <Home className="h-4 w-4 mr-2" />
+              <Home className="h-4 w-4" />
               Return Home
-            </Button>
+            </button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

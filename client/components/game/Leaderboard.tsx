@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo } from "react";
-import { Trophy } from "lucide-react";
 import type { Problem, LeaderboardEntry, ProblemScore } from "@/types";
 
 interface LeaderboardProps {
@@ -24,7 +23,7 @@ function formatSolveTime(solvedAt: string, startTime: string): string {
   return `${minutes}:${seconds.toString().padStart(2, '0')}`;
 }
 
-// Get rank icon/number based on position
+// Get rank display based on position
 function RankDisplay({ rank }: { rank: number }) {
   if (rank === 1) {
     return (
@@ -49,7 +48,7 @@ function RankDisplay({ rank }: { rank: number }) {
   }
   return (
     <div className="flex items-center justify-center">
-      <span className="text-gray-400 font-medium">{rank}</span>
+      <span className="text-pink-600/70 font-kungfu text-lg">{rank}</span>
     </div>
   );
 }
@@ -66,8 +65,8 @@ function ProblemScoreCell({
     return (
       <td className="py-4 px-4 text-center">
         <div className="flex flex-col items-center">
-          <span className="text-red-400 font-medium">0</span>
-          <span className="text-xs text-gray-500">-</span>
+          <span className="text-red-600/70 font-kungfu">0</span>
+          <span className="text-xs text-pink-600/30">-</span>
         </div>
       </td>
     );
@@ -78,8 +77,8 @@ function ProblemScoreCell({
   return (
     <td className="py-4 px-4 text-center">
       <div className="flex flex-col items-center">
-        <span className="text-green-400 font-bold">{problemScore.points}</span>
-        <span className="text-xs text-gray-400">{solveTime}</span>
+        <span className="text-green-700 font-kungfu text-lg">{problemScore.points}</span>
+        <span className="text-xs text-pink-600/50">{solveTime}</span>
       </div>
     </td>
   );
@@ -96,15 +95,6 @@ export function Leaderboard({
     return problems.reduce((sum, p) => sum + p.basePoints, 0);
   }, [problems]);
 
-  // Create a map of problemKey to index for quick lookup
-  const problemIndexMap = useMemo(() => {
-    const map = new Map<string, number>();
-    problems.forEach((p, idx) => {
-      map.set(`${p.contestId}-${p.index}`, idx);
-    });
-    return map;
-  }, [problems]);
-
   // Get problem score for a specific problem
   const getProblemScore = (
     entry: LeaderboardEntry,
@@ -117,16 +107,16 @@ export function Leaderboard({
 
   if (!leaderboard || leaderboard.length === 0) {
     return (
-      <div className="bg-white/5 backdrop-blur border border-white/10 rounded-2xl overflow-hidden">
-        <div className="p-6 border-b border-white/10">
-          <h2 className="text-xl font-semibold flex items-center gap-2 text-white">
-            <Trophy className="h-5 w-5 text-yellow-400" />
+      <div className="kfp-panel overflow-hidden">
+        <div className="p-6 border-b border-pink-300/30">
+          <h2 className="text-xl font-kungfu tracking-wider text-pink-800 flex items-center gap-2">
+            <span className="text-2xl">🏆</span>
             Leaderboard
           </h2>
         </div>
-        <div className="text-center py-12 text-gray-400">
-          <Trophy className="h-12 w-12 mx-auto mb-4 opacity-30" />
-          <p className="text-lg">No solves yet</p>
+        <div className="text-center py-12 text-pink-600/50">
+          <span className="text-5xl block mb-4">🏆</span>
+          <p className="text-lg font-kungfu tracking-wide">No solves yet</p>
           <p className="text-sm mt-1">Be the first to solve a problem!</p>
         </div>
       </div>
@@ -134,11 +124,11 @@ export function Leaderboard({
   }
 
   return (
-    <div className="bg-white/5 backdrop-blur border border-white/10 rounded-2xl overflow-hidden">
+    <div className="kfp-panel overflow-hidden">
       {/* Header */}
-      <div className="p-6 border-b border-white/10">
-        <h2 className="text-xl font-semibold flex items-center gap-2 text-white">
-          <Trophy className="h-5 w-5 text-yellow-400" />
+      <div className="p-6 border-b border-pink-300/30">
+        <h2 className="text-xl font-kungfu tracking-wider text-pink-800 flex items-center gap-2">
+          <span className="text-2xl">🏆</span>
           Leaderboard
         </h2>
       </div>
@@ -147,10 +137,10 @@ export function Leaderboard({
       <div className="overflow-x-auto">
         <table className="w-full">
           <thead>
-            <tr className="border-b border-white/10 text-gray-400 text-sm">
+            <tr className="border-b border-pink-300/30 text-pink-600/70 text-sm font-kungfu tracking-wide">
               <th className="text-left py-4 px-6 font-medium w-20">Rank</th>
               <th className="text-left py-4 px-6 font-medium min-w-40">
-                Contestant
+                Warrior
               </th>
               {problems.map((problem, index) => (
                 <th
@@ -158,8 +148,8 @@ export function Leaderboard({
                   className="text-center py-4 px-4 font-medium min-w-20"
                 >
                   <div className="flex flex-col items-center">
-                    <span className="text-white">{index + 1}</span>
-                    <span className="text-xs text-gray-500">
+                    <span className="text-pink-800">{index + 1}</span>
+                    <span className="text-xs text-pink-600/40">
                       ({problem.basePoints})
                     </span>
                   </div>
@@ -167,8 +157,8 @@ export function Leaderboard({
               ))}
               <th className="text-center py-4 px-6 font-medium min-w-24">
                 <div className="flex flex-col items-center">
-                  <span className="text-white">Score</span>
-                  <span className="text-xs text-gray-500">
+                  <span className="text-pink-800">Score</span>
+                  <span className="text-xs text-pink-600/40">
                     ({totalPossiblePoints})
                   </span>
                 </div>
@@ -183,10 +173,12 @@ export function Leaderboard({
               return (
                 <tr
                   key={entry.handle}
-                  className={`border-b border-white/5 transition-all duration-300 ${
+                  className={`border-b border-pink-300/30 transition-all duration-300 ${
                     isCurrentUser
-                      ? "bg-blue-500/10 hover:bg-blue-500/15"
-                      : "hover:bg-white/5"
+                      ? "bg-pink-400/10"
+                      : rank === 1
+                        ? "bg-yellow-300/10"
+                        : "hover:bg-pink-200/20"
                   }`}
                 >
                   {/* Rank */}
@@ -197,8 +189,8 @@ export function Leaderboard({
                   {/* Contestant */}
                   <td className="py-4 px-6">
                     <span
-                      className={`font-medium ${
-                        isCurrentUser ? "text-cyan-400" : "text-green-400"
+                      className={`font-kungfu tracking-wide ${
+                        isCurrentUser ? "text-cyan-600" : rank === 1 ? "text-yellow-700" : "text-pink-800"
                       }`}
                     >
                       {entry.handle}
@@ -220,8 +212,8 @@ export function Leaderboard({
                   {/* Total Score */}
                   <td className="py-4 px-6 text-center">
                     <span
-                      className={`font-bold text-lg ${
-                        entry.totalPoints > 0 ? "text-green-400" : "text-red-400"
+                      className={`font-kungfu text-xl ${
+                        entry.totalPoints > 0 ? "text-green-700" : "text-red-600/70"
                       }`}
                     >
                       {entry.totalPoints}

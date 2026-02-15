@@ -77,8 +77,8 @@ function ProblemScoreCell({
   return (
     <td className="py-4 px-4 text-center">
       <div className="flex flex-col items-center">
-        <span className="text-green-700 font-kungfu text-lg">{problemScore.points}</span>
-        <span className="text-xs text-pink-600/50">{solveTime}</span>
+        <span className="text-emerald-800 font-kungfu text-lg font-bold">{problemScore.points}</span>
+        <span className="text-xs text-emerald-700/70">{solveTime}</span>
       </div>
     </td>
   );
@@ -212,8 +212,8 @@ export function Leaderboard({
                   {/* Total Score */}
                   <td className="py-4 px-6 text-center">
                     <span
-                      className={`font-kungfu text-xl ${
-                        entry.totalPoints > 0 ? "text-green-700" : "text-red-600/70"
+                      className={`font-kungfu text-xl font-bold ${
+                        entry.totalPoints > 0 ? "text-emerald-800" : "text-red-600/70"
                       }`}
                     >
                       {entry.totalPoints}

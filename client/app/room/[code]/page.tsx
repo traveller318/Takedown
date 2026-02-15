@@ -534,6 +534,10 @@ export default function RoomPage() {
       toast.error("Not connected to server. Please wait...");
       return;
     }
+    if (!room || room.participants.length < 2) {
+      toast.error("You cannot start the game with less than 2 players");
+      return;
+    }
 
     setIsStartingGame(true);
 

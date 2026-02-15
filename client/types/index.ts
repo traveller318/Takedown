@@ -85,3 +85,10 @@ export interface ProblemNotSolvedData {
   index: string;
   message: string;
 }
+
+// Game ended event data from socket (auto-evaluation complete)
+export interface GameEndedData {
+  roomCode: string;
+  leaderboard: LeaderboardEntry[];
+  winner: LeaderboardEntry | null;
+}

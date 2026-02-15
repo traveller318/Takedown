@@ -669,6 +669,127 @@ const checkSubmission = async (req, res) => {
 };
 
 /**
+ * Internal function to auto-check all submissions for all players when game ends
+ * Called by server-side game timer when duration expires
+ * @param {string} roomCode - The room code
+ * @returns {Promise<Object>} - { leaderboard, winner }
+ */
+const autoCheckAllSubmissionsInternal = async (roomCode) => {
+  try {
+    console.log('[autoCheckAllSubmissions] Starting auto-evaluation for room:', roomCode);
+
+    const room = await Room.findOne({ code: roomCode }).populate('participants', 'handle');
+    if (!room) {
+      console.log('[autoCheckAllSubmissions] Room not found:', roomCode);
+      return { leaderboard: [], winner: null };
+    }
+
+    // If already ended, just return current leaderboard
+    if (room.status === 'ended') {
+      console.log('[autoCheckAllSubmissions] Game already ended');
+      const leaderboard = await computeLeaderboard(room._id);
+      const winner = leaderboard.length > 0 ? leaderboard[0] : null;
+      return { leaderboard, winner };
+    }
+
+    const roomProblems = await RoomProblem.find({ roomId: room._id });
+    const gameEndTime = room.startTime.getTime() + room.settings.duration * 60 * 1000;
+
+    console.log('[autoCheckAllSubmissions] Checking', room.participants.length, 'participants for', roomProblems.length, 'problems');
+
+    for (let i = 0; i < room.participants.length; i++) {
+      const participant = room.participants[i];
+
+      try {
+        // Add delay between API calls to respect CF rate limits (except first)
+        if (i > 0) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+
+        // Fetch all recent submissions from Codeforces for this participant
+        const cfResponse = await fetch(`${CF_API}/user.status?handle=${participant.handle}&count=50`);
+        const cfData = await cfResponse.json();
+
+        if (cfData.status !== 'OK') {
+          console.log('[autoCheckAllSubmissions] CF API failed for:', participant.handle);
+          continue;
+        }
+
+        // Check each problem
+        for (const problem of roomProblems) {
+          // Skip if already scored
+          const existingScore = await Score.findOne({
+            roomId: room._id,
+            userId: participant._id,
+            contestId: problem.contestId,
+            index: problem.index
+          });
+
+          if (existingScore) {
+            console.log('[autoCheckAllSubmissions] Already scored:', participant.handle, problem.contestId + problem.index);
+            continue;
+          }
+
+          // Find valid accepted submission before game end
+          let earliestSubmission = null;
+          for (const sub of cfData.result) {
+            if (
+              sub.problem.contestId === problem.contestId &&
+              sub.problem.index === problem.index &&
+              sub.verdict === 'OK' &&
+              sub.creationTimeSeconds * 1000 > room.startTime.getTime() &&
+              sub.creationTimeSeconds * 1000 <= gameEndTime
+            ) {
+              if (!earliestSubmission || sub.creationTimeSeconds < earliestSubmission.creationTimeSeconds) {
+                earliestSubmission = sub;
+              }
+            }
+          }
+
+          if (earliestSubmission) {
+            // Calculate points
+            const solveTime = earliestSubmission.creationTimeSeconds * 1000;
+            const elapsedMinutes = Math.floor((solveTime - room.startTime.getTime()) / 60000);
+            const rawPoints = problem.basePoints - (elapsedMinutes * 5);
+            const points = Math.max(rawPoints, problem.minPoints);
+
+            await Score.create({
+              roomId: room._id,
+              userId: participant._id,
+              contestId: problem.contestId,
+              index: problem.index,
+              solvedAt: new Date(solveTime),
+              points
+            });
+
+            console.log('[autoCheckAllSubmissions] Scored:', participant.handle, problem.contestId + problem.index, points, 'pts');
+          }
+        }
+      } catch (participantError) {
+        console.error('[autoCheckAllSubmissions] Error checking participant:', participant.handle, participantError);
+      }
+    }
+
+    // Mark game as ended
+    room.status = 'ended';
+    await room.save();
+
+    // Compute final leaderboard
+    const leaderboard = await computeLeaderboard(room._id);
+
+    // Determine winner
+    const winner = leaderboard.length > 0 ? leaderboard[0] : null;
+
+    console.log('[autoCheckAllSubmissions] Evaluation complete. Winner:', winner?.handle || 'none');
+
+    return { leaderboard, winner };
+  } catch (error) {
+    console.error('[autoCheckAllSubmissions] Error:', error);
+    return { leaderboard: [], winner: null };
+  }
+};
+
+/**
  * POST /api/game/:code/end
  * End game - only host allowed
  */
@@ -712,5 +833,6 @@ module.exports = {
   // Internal functions for socket handlers (different names to avoid confusion)
   startGameInternal,
   getLeaderboardInternal,
-  checkSubmissionInternal
+  checkSubmissionInternal,
+  autoCheckAllSubmissionsInternal
 };

@@ -65,7 +65,7 @@ export function ProblemCard({
     <div
       className={`kfp-card relative transition-all duration-300 ${
         isSolved
-          ? "ring-2 ring-green-500/40 shadow-[0_0_20px_rgba(34,197,94,0.15)]"
+          ? "!bg-gradient-to-br !from-green-100/80 !to-green-200/70 !border-green-400/50 ring-2 ring-green-500/40 shadow-[0_0_20px_rgba(34,197,94,0.2)]"
           : "hover:shadow-[0_0_25px_rgba(255,182,193,0.3)]"
       }`}
     >

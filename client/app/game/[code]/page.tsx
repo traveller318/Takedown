@@ -24,7 +24,7 @@ import { GameHeader, ProblemsList, Leaderboard } from "@/components/game";
 import { ReconnectingBanner } from "@/components/ReconnectingBanner";
 import { GameNotFound } from "@/components/NotFound";
 import { getGameState, getGameProblems, getGameLeaderboard, ApiError } from "@/lib/api";
-import type { Problem, ProblemSolvedData, ProblemNotSolvedData } from "@/types";
+import type { Problem, ProblemSolvedData, ProblemNotSolvedData, GameEndedData, LeaderboardEntry } from "@/types";
 
 // Type for tracking solved problems with earned points
 interface SolvedProblemInfo {
@@ -60,6 +60,9 @@ export default function GamePage() {
   const [gameNotFound, setGameNotFound] = useState(false);
   const [isGameEnded, setIsGameEnded] = useState(false);
   const [showGameOverDialog, setShowGameOverDialog] = useState(false);
+  const [isEvaluating, setIsEvaluating] = useState(false);
+  const [winner, setWinner] = useState<LeaderboardEntry | null>(null);
+  const [redirectCountdown, setRedirectCountdown] = useState<number | null>(null);
   
   // Timeout ref for check problem
   const checkTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -198,12 +201,13 @@ export default function GamePage() {
     };
   }, [socket, isConnected, roomCode, emit, trackRoom, untrackRoom]);
 
-  // Handle time up - show game over dialog
+  // Handle time up - show evaluating dialog while server auto-checks
   const handleTimeUp = useCallback(() => {
-    console.log("[GamePage] Time's up! Showing game over dialog");
+    console.log("[GamePage] Time's up! Waiting for server evaluation...");
     setIsGameEnded(true);
+    setIsEvaluating(true);
     setShowGameOverDialog(true);
-    toast.info("Time's up! Game has ended.", {
+    toast.info("Time's up! Evaluating submissions...", {
       icon: "⏰",
       duration: 5000,
     });
@@ -239,9 +243,64 @@ export default function GamePage() {
   
   // Handle return home from game over dialog
   const handleReturnHome = useCallback(() => {
+    setRedirectCountdown(null);
     setShowGameOverDialog(false);
     handleExitGame();
   }, [handleExitGame]);
+
+  // Listen for game-ended event (server auto-evaluation complete)
+  useEffect(() => {
+    if (!socket || !isConnected) return;
+
+    const handleGameEnded = (data: GameEndedData) => {
+      console.log("[GamePage] Game ended event received:", data);
+
+      // Update leaderboard with final data from server
+      updateLeaderboard(data.leaderboard);
+
+      // Set winner
+      setWinner(data.winner);
+
+      // Mark as no longer evaluating
+      setIsEvaluating(false);
+
+      // Ensure game over dialog is showing (in case server event arrived before client timer)
+      setIsGameEnded(true);
+      setShowGameOverDialog(true);
+
+      // Start countdown for auto-redirect to dashboard
+      setRedirectCountdown(15);
+
+      toast.success(
+        data.winner
+          ? `🏆 ${data.winner.handle} wins with ${data.winner.totalPoints} points!`
+          : "Game Over! No submissions found.",
+        { duration: 5000 }
+      );
+    };
+
+    on<GameEndedData>("game-ended", handleGameEnded);
+
+    return () => {
+      off("game-ended");
+    };
+  }, [socket, isConnected, on, off, updateLeaderboard]);
+
+  // Auto-redirect countdown after game ends
+  useEffect(() => {
+    if (redirectCountdown === null) return;
+
+    if (redirectCountdown <= 0) {
+      handleReturnHome();
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      setRedirectCountdown((prev) => (prev !== null ? prev - 1 : null));
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [redirectCountdown, handleReturnHome]);
 
   // Listen for problem-solved and problem-not-solved events
   useEffect(() => {
@@ -639,40 +698,85 @@ export default function GamePage() {
       </div>
 
       {/* Game Over Dialog */}
-      <Dialog open={showGameOverDialog} onOpenChange={setShowGameOverDialog}>
-        <DialogContent className="sm:max-w-2xl bg-white/95 border-2 border-pink-400/50 text-pink-900 max-h-[90vh] overflow-y-auto shadow-[0_0_60px_rgba(255,182,193,0.4)]">
+      <Dialog open={showGameOverDialog} onOpenChange={(open) => {
+        // Don't allow closing during evaluation
+        if (!isEvaluating) setShowGameOverDialog(open);
+      }}>
+        <DialogContent className="sm:max-w-2xl bg-white/95 border-2 border-pink-400/50 text-pink-900 shadow-[0_0_60px_rgba(255,182,193,0.4)]">
           <DialogHeader className="text-center">
-            <div className="flex justify-center mb-4">
-              <div className="bg-yellow-100/60 border-2 border-yellow-500/40 rounded-full p-4">
-                <Trophy className="h-12 w-12 text-yellow-600" />
-              </div>
-            </div>
-            <DialogTitle className="text-4xl font-kungfu tracking-wider text-center text-pink-800">
-              Game Over!
-            </DialogTitle>
-            <DialogDescription className="text-pink-600/70 text-center text-lg font-kungfu tracking-wide">
-              Time&apos;s up! Here are the final results.
-            </DialogDescription>
+            {isEvaluating ? (
+              <>
+                <div className="flex justify-center mb-4">
+                  <div className="bg-pink-100/60 border-2 border-pink-300/40 rounded-full p-4">
+                    <Loader2 className="h-12 w-12 animate-spin text-pink-600" />
+                  </div>
+                </div>
+                <DialogTitle className="text-4xl font-kungfu tracking-wider text-center text-pink-800">
+                  Time&apos;s Up!
+                </DialogTitle>
+                <DialogDescription className="text-pink-600/70 text-center text-lg font-kungfu tracking-wide">
+                  Evaluating all submissions... Please wait.
+                </DialogDescription>
+              </>
+            ) : (
+              <>
+                <div className="flex justify-center mb-4">
+                  <div className="bg-yellow-100/60 border-2 border-yellow-500/40 rounded-full p-4">
+                    <Trophy className="h-12 w-12 text-yellow-600" />
+                  </div>
+                </div>
+                <DialogTitle className="text-4xl font-kungfu tracking-wider text-center text-pink-800">
+                  Game Over!
+                </DialogTitle>
+                <DialogDescription className="text-pink-600/70 text-center text-lg font-kungfu tracking-wide">
+                  Final results are in!
+                </DialogDescription>
+              </>
+            )}
           </DialogHeader>
 
-          {/* Final Leaderboard */}
-          <div className="mt-4">
-            <Leaderboard
-              leaderboard={leaderboard}
-              problems={displayProblems}
-              currentUserHandle={user?.handle}
-              startTime={startTime}
-            />
-          </div>
+          {/* Winner announcement */}
+          {!isEvaluating && winner && (
+            <div className="text-center mt-2 p-4 bg-linear-to-r from-yellow-100/80 via-amber-100/80 to-yellow-100/80 rounded-xl border-2 border-yellow-400/50">
+              <span className="text-4xl">🏆</span>
+              <h3 className="text-2xl font-kungfu tracking-wider text-amber-800 mt-2">
+                {winner.handle} wins!
+              </h3>
+              <p className="text-amber-700/70 font-kungfu tracking-wide mt-1">
+                {winner.totalPoints} points &bull; {winner.solvedCount} problem{winner.solvedCount !== 1 ? "s" : ""} solved
+              </p>
+            </div>
+          )}
 
-          <DialogFooter className="mt-6 sm:justify-center">
-            <button
-              onClick={handleReturnHome}
-              className="flex items-center gap-2 px-8 py-3 bg-pink-300/70 border-2 border-pink-400/50 rounded-lg text-pink-900 font-kungfu tracking-wider hover:bg-pink-400/70 transition-colors shadow-[0_0_20px_rgba(255,182,193,0.3)]"
-            >
-              <Home className="h-4 w-4" />
-              Return Home
-            </button>
+          {/* Final Leaderboard */}
+          {!isEvaluating && (
+            <div className="mt-4">
+              <Leaderboard
+                leaderboard={leaderboard}
+                problems={displayProblems}
+                currentUserHandle={user?.handle}
+                startTime={startTime}
+              />
+            </div>
+          )}
+
+          <DialogFooter className="mt-6 sm:justify-center flex-col items-center gap-3">
+            {!isEvaluating && (
+              <>
+                {redirectCountdown !== null && redirectCountdown > 0 && (
+                  <p className="text-pink-600/70 font-kungfu tracking-wide text-sm">
+                    Redirecting to dashboard in {redirectCountdown}s...
+                  </p>
+                )}
+                <button
+                  onClick={handleReturnHome}
+                  className="flex items-center gap-2 px-8 py-3 bg-pink-300/70 border-2 border-pink-400/50 rounded-lg text-pink-900 font-kungfu tracking-wider hover:bg-pink-400/70 transition-colors shadow-[0_0_20px_rgba(255,182,193,0.3)]"
+                >
+                  <Home className="h-4 w-4" />
+                  Return Home
+                </button>
+              </>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

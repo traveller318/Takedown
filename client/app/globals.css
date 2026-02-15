@@ -225,6 +225,17 @@ html {
   border-bottom-right-radius: 12px;
 }
 
+/* Solved card - override pseudo-element borders to green */
+.kfp-card.ring-green-500\/40::before {
+  border-top-color: rgba(74, 222, 128, 0.5);
+  border-left-color: rgba(74, 222, 128, 0.5);
+}
+
+.kfp-card.ring-green-500\/40::after {
+  border-bottom-color: rgba(74, 222, 128, 0.5);
+  border-right-color: rgba(74, 222, 128, 0.5);
+}
+
 /* KungFu font utility (for Tailwind) */
 .font-kungfu {
   font-family: 'KungFuPanda', var(--font-geist-sans), sans-serif;

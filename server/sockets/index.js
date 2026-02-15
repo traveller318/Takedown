@@ -12,6 +12,9 @@ const gameController = require('../controllers/gameController');
 // Store active rooms for timer sync
 const activeGameRooms = new Set();
 
+// Store game end timers (roomCode -> timeout handle)
+const gameTimers = new Map();
+
 // Track disconnected players with grace period
 // Structure: Map<roomCode, Map<userId, { timeout, handle, disconnectedAt }>>
 const disconnectedPlayers = new Map();
@@ -117,6 +120,11 @@ function initSockets(io) {
         await Score.deleteMany({ roomId: room._id });
         await Room.deleteOne({ _id: room._id });
         activeGameRooms.delete(roomCode);
+        // Clean up game end timer
+        if (gameTimers.has(roomCode)) {
+          clearTimeout(gameTimers.get(roomCode));
+          gameTimers.delete(roomCode);
+        }
         debug.success('GRACE-PERIOD', 'Room cleanup complete', { roomCode });
       } else {
         await room.save();
@@ -192,6 +200,59 @@ function initSockets(io) {
     } catch (error) {
       debug.error('HOST-TRANSFER', 'Error transferring host', error);
       return false;
+    }
+  }
+
+  /**
+   * Handle game end - auto-evaluate all submissions and emit final results
+   * Called when the server-side game timer expires
+   */
+  async function handleGameEnd(roomCode) {
+    debug.log('GAME-END', 'Game timer expired, starting auto-evaluation', { roomCode });
+
+    // Clean up timer reference
+    gameTimers.delete(roomCode);
+
+    try {
+      // Auto-check all submissions and get final leaderboard
+      const result = await gameController.autoCheckAllSubmissionsInternal(roomCode);
+
+      // Remove from active game rooms
+      activeGameRooms.delete(roomCode);
+
+      // Emit game-ended event with final leaderboard and winner
+      io.to(roomCode).emit('game-ended', {
+        roomCode,
+        leaderboard: result.leaderboard,
+        winner: result.winner
+      });
+
+      debug.success('GAME-END', 'Game ended and results emitted', {
+        roomCode,
+        leaderboardSize: result.leaderboard.length,
+        winner: result.winner?.handle || 'none'
+      });
+    } catch (error) {
+      debug.error('GAME-END', 'Error during game end', error);
+
+      // Still try to emit game-ended even if auto-check fails
+      activeGameRooms.delete(roomCode);
+
+      try {
+        const fallbackLeaderboard = await gameController.getLeaderboardInternal(roomCode);
+        io.to(roomCode).emit('game-ended', {
+          roomCode,
+          leaderboard: fallbackLeaderboard,
+          winner: fallbackLeaderboard.length > 0 ? fallbackLeaderboard[0] : null
+        });
+      } catch (fallbackError) {
+        debug.error('GAME-END', 'Fallback leaderboard also failed', fallbackError);
+        io.to(roomCode).emit('game-ended', {
+          roomCode,
+          leaderboard: [],
+          winner: null
+        });
+      }
     }
   }
 
@@ -352,6 +413,11 @@ function initSockets(io) {
           await Score.deleteMany({ roomId: room._id });
           await Room.deleteOne({ _id: room._id });
           activeGameRooms.delete(roomCode);
+          // Clean up game end timer
+          if (gameTimers.has(roomCode)) {
+            clearTimeout(gameTimers.get(roomCode));
+            gameTimers.delete(roomCode);
+          }
           debug.success('LEAVE-ROOM', 'Room cleanup complete', { roomCode });
         } else {
           // Transfer host if the leaving user was the host of a waiting room
@@ -424,6 +490,15 @@ function initSockets(io) {
           return socket.emit('error', { message: 'Only the host can start the game' });
         }
 
+        // Require at least 2 participants
+        if (room.participants.length < 2) {
+          debug.warn('START-GAME', 'Not enough players to start', { 
+            roomCode, 
+            participantCount: room.participants.length 
+          });
+          return socket.emit('error', { message: 'You cannot start the game with less than 2 players' });
+        }
+
         // *** IMMEDIATELY emit game-starting to ALL users so they see loading screen ***
         debug.log('START-GAME', `Emitting game-starting to all users in room`);
         io.to(roomCode).emit('game-starting', { roomCode });
@@ -448,6 +523,22 @@ function initSockets(io) {
         activeGameRooms.add(roomCode);
         debug.log('START-GAME', `Room added to active game rooms`, { 
           activeRoomCount: activeGameRooms.size 
+        });
+
+        // Schedule server-side game end timer for auto-evaluation
+        const durationMs = gameData.duration * 60 * 1000;
+        // Clear any existing timer for this room (safety)
+        if (gameTimers.has(roomCode)) {
+          clearTimeout(gameTimers.get(roomCode));
+        }
+        const gameEndTimer = setTimeout(async () => {
+          await handleGameEnd(roomCode);
+        }, durationMs);
+        gameTimers.set(roomCode, gameEndTimer);
+        debug.log('START-GAME', `Game end timer scheduled`, { 
+          roomCode, 
+          durationMinutes: gameData.duration,
+          durationMs 
         });
 
         const gameStartedPayload = {
@@ -641,6 +732,11 @@ function initSockets(io) {
               await Score.deleteMany({ roomId: room._id });
               await Room.deleteOne({ _id: room._id });
               activeGameRooms.delete(room.code);
+              // Clean up game end timer
+              if (gameTimers.has(room.code)) {
+                clearTimeout(gameTimers.get(room.code));
+                gameTimers.delete(room.code);
+              }
               debug.success('DISCONNECT', `Room cleanup complete`, { roomCode: room.code });
             } else {
               await room.save();

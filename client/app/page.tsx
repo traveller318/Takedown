@@ -36,20 +36,38 @@ export default function Home() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!loginHandle.trim()) {
+    const trimmedHandle = loginHandle.trim();
+    
+    if (!trimmedHandle) {
       toast.error("Please enter a Codeforces username");
+      return;
+    }
+
+    // Validate Codeforces username format (letters, digits, hyphens, underscores)
+    const usernameRegex = /^[a-zA-Z0-9_-]+$/;
+    if (!usernameRegex.test(trimmedHandle)) {
+      toast.error("Username can only contain letters, numbers, hyphens, and underscores");
+      return;
+    }
+
+    if (trimmedHandle.length < 3 || trimmedHandle.length > 24) {
+      toast.error("Username must be between 3 and 24 characters");
       return;
     }
 
     setIsLoginLoading(true);
     try {
-      await login(loginHandle.trim());
+      await login(trimmedHandle);
       toast.success("Login successful!");
       setIsDialogOpen(false);
       setLoginHandle("");
     } catch (error) {
-      toast.error("Wrong username");
-      
+      if (error instanceof Error) {
+        // Show specific error message from server if available
+        toast.error(error.message || "Invalid Codeforces username");
+      } else {
+        toast.error("Invalid Codeforces username");
+      }
     } finally {
       setIsLoginLoading(false);
     }
@@ -226,14 +244,20 @@ export default function Home() {
                   </DialogDescription>
                 </DialogHeader>
                 <form onSubmit={handleLogin} className="space-y-4 mt-4">
-                  <Input
-                    type="text"
-                    placeholder="Codeforces username"
-                    value={loginHandle}
-                    onChange={(e) => setLoginHandle(e.target.value)}
-                    className="bg-[#f5d78e]/10 border-[#d4a843]/40 text-white placeholder:text-[#d4a843]/50 rounded-xl focus-visible:ring-[#d4a843]/30 focus-visible:border-[#d4a843]/60"
-                    disabled={isLoginLoading}
-                  />
+                  <div className="space-y-2">
+                    <Input
+                      type="text"
+                      placeholder="Codeforces username"
+                      value={loginHandle}
+                      onChange={(e) => setLoginHandle(e.target.value)}
+                      className="bg-[#f5d78e]/10 border-[#d4a843]/40 text-white placeholder:text-[#d4a843]/50 rounded-xl focus-visible:ring-[#d4a843]/30 focus-visible:border-[#d4a843]/60"
+                      disabled={isLoginLoading}
+                      autoComplete="off"
+                    />
+                    <p className="text-xs text-gray-400">
+                      Allowed: letters, numbers, hyphens (-), and underscores (_)
+                    </p>
+                  </div>
                   <Button
                     type="submit"
                     className="w-full bg-linear-to-b from-[#f5d78e] to-[#d4a843] text-[#3b2409] font-semibold rounded-xl hover:from-[#f7e0a0] hover:to-[#dcb44e] hover:scale-[1.02] transition-all duration-300 ease-out shadow-[0_2px_10px_rgba(212,168,67,0.3)]"

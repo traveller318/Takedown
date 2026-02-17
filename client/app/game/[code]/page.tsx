@@ -55,7 +55,10 @@ export default function GamePage() {
   const [solvedProblems, setSolvedProblems] = useState<Map<string, SolvedProblemInfo>>(new Map());
   const [checkingProblem, setCheckingProblem] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"problems" | "leaderboard">("problems");
-  const [isLoadingState, setIsLoadingState] = useState(true);
+  const [isLoadingState, setIsLoadingState] = useState(() => {
+    // Skip loading screen if game data is already available from context (navigating from room page)
+    return !isGameActive || !problems || problems.length === 0;
+  });
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [gameNotFound, setGameNotFound] = useState(false);
   const [isGameEnded, setIsGameEnded] = useState(false);
@@ -89,8 +92,12 @@ export default function GamePage() {
     
     // Always fetch game state on mount to restore solved problems
     // This handles page refresh correctly
+    const hasContextData = isGameActive && problems && problems.length > 0;
     const doFetch = async () => {
-      setIsLoadingState(true);
+      // Only show loading if we don't already have data from context
+      if (!hasContextData) {
+        setIsLoadingState(true);
+      }
       setFetchError(null);
       
       try {
@@ -666,19 +673,19 @@ export default function GamePage() {
                   </h3>
                   <div className="space-y-3 text-white/80">
                     <div className="flex items-start gap-3">
-                      <span className="text-green-400 mt-0.5">✓</span>
+                      <span className="text-green-400 mt-0.5 text-base">✓</span>
                       <p className="font-kungfu tracking-wide text-sm">Click <span className="text-white font-semibold">Check</span> once you see accepted submission on CF.</p>
                     </div>
                     <div className="flex items-start gap-3">
-                      <span className="text-white/50 mt-1">•</span>
+                      <span className="text-green-400 mt-0.5 text-base">✓</span>
                       <p className="font-kungfu tracking-wide text-sm">Points are calculated based on time your solution was accepted.</p>
                     </div>
                     <div className="flex items-start gap-3">
-                      <span className="text-white/50 mt-1">•</span>
+                      <span className="text-green-400 mt-0.5 text-base">✓</span>
                       <p className="font-kungfu tracking-wide text-sm">No negative points for wrong submissions.</p>
                     </div>
                     <div className="flex items-start gap-3">
-                      <span className="text-green-400 mt-0.5">✓</span>
+                      <span className="text-green-400 mt-0.5 text-base">✓</span>
                       <p className="font-kungfu tracking-wide text-sm">You can check your progress on the leaderboard, updates every minute.</p>
                     </div>
                   </div>

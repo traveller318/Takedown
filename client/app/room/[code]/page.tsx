@@ -542,6 +542,12 @@ export default function RoomPage() {
     setIsStartingGame(true);
 
     try {
+      // Auto-save current settings to DB before starting the game
+      // This ensures the game uses the settings visible on screen
+      console.log("[RoomPage] Auto-saving settings before starting game:", settings);
+      await updateRoomSettings(roomCode, settings);
+      console.log("[RoomPage] Settings saved successfully");
+
       // Emit socket event to start game
       // The GameContext will handle the 'game-started' event and navigate
       console.log("[RoomPage] Emitting start-game event for room:", roomCode);
@@ -652,10 +658,10 @@ export default function RoomPage() {
               <h2
                 className={`text-4xl font-bold text-[#FDF5E6] mb-2 ${shojumaru.className}`}
               >
-                Starting Duel...
+                Loading Problems...
               </h2>
               <p className="text-[#FDF5E6]/80 text-xl font-serif italic">
-                The masters are preparing the scrolls...
+                Preparing the battle arena...
               </p>
             </div>
 

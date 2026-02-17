@@ -174,11 +174,21 @@ const startGameInternal = async (roomCode) => {
     // 4. Calculate mid rating for split selection
     const minR = room.settings.minRating;
     const maxR = room.settings.maxRating;
+
+    // Validate rating range
+    if (!minR || !maxR || minR >= maxR) {
+      console.log('[startGameInternal] Invalid rating range:', minR, '-', maxR);
+      return { success: false, error: `Invalid rating range: ${minR} - ${maxR}. Min must be less than Max.` };
+    }
+
     const midR = Math.floor((minR + maxR) / 2);
 
-    console.log('[startGameInternal] Rating split:', minR, '-', midR, '-', maxR);
+    console.log('[startGameInternal] Rating range from DB:', minR, '-', maxR);
+    console.log('[startGameInternal] Rating split: lower [' + minR + '-' + midR + '], upper [' + (midR + 1) + '-' + maxR + ']');
 
     // 5. Filter problems into two halves by rating
+    // Lower half: [minR, midR]
+    // Upper half: (midR, maxR]  — strictly greater than midR
     const lowerHalf = data.result.problems.filter(
       p => p.rating && p.rating >= minR && p.rating <= midR
     );
@@ -186,22 +196,30 @@ const startGameInternal = async (roomCode) => {
       p => p.rating && p.rating > midR && p.rating <= maxR
     );
 
-    console.log('[startGameInternal] Lower half:', lowerHalf.length, 'problems (' + minR + '-' + midR + ')');
-    console.log('[startGameInternal] Upper half:', upperHalf.length, 'problems (' + (midR + 1) + '-' + maxR + ')');
+    console.log('[startGameInternal] Lower half:', lowerHalf.length, 'problems (ratings ' + minR + '-' + midR + ')');
+    console.log('[startGameInternal] Upper half:', upperHalf.length, 'problems (ratings ' + (midR + 1) + '-' + maxR + ')');
 
-    // 6. Shuffle each half and pick one from each
-    const shuffledLower = lowerHalf.sort(() => Math.random() - 0.5);
-    const shuffledUpper = upperHalf.sort(() => Math.random() - 0.5);
+    // 6. Fisher-Yates shuffle each half and pick one from each
+    for (let i = lowerHalf.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [lowerHalf[i], lowerHalf[j]] = [lowerHalf[j], lowerHalf[i]];
+    }
+    for (let i = upperHalf.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [upperHalf[i], upperHalf[j]] = [upperHalf[j], upperHalf[i]];
+    }
 
-    if (shuffledLower.length < 1 || shuffledUpper.length < 1) {
-      console.log('[startGameInternal] Not enough problems found in one of the halves');
-      return { success: false, error: 'Could not fetch enough problems. Try adjusting rating range.' };
+    if (lowerHalf.length < 1 || upperHalf.length < 1) {
+      console.log('[startGameInternal] Not enough problems found. Lower:', lowerHalf.length, 'Upper:', upperHalf.length);
+      return { success: false, error: 'Could not fetch enough problems. Try adjusting rating range so both halves have problems.' };
     }
 
     // Select exactly 2 problems: one from each half
-    const selected = [shuffledLower[0], shuffledUpper[0]];
+    const selected = [lowerHalf[0], upperHalf[0]];
 
     console.log('[startGameInternal] Selected', selected.length, 'problems');
+    console.log('[startGameInternal] Problem 1 (easier):', selected[0].contestId + selected[0].index, 'rating:', selected[0].rating);
+    console.log('[startGameInternal] Problem 2 (harder):', selected[1].contestId + selected[1].index, 'rating:', selected[1].rating);
 
     // 7. Clear any existing problems for this room (in case of restart)
     await RoomProblem.deleteMany({ roomId: room._id });
@@ -288,9 +306,17 @@ const startGame = async (req, res) => {
     // 5. Calculate mid rating for split selection
     const minR = room.settings.minRating;
     const maxR = room.settings.maxRating;
+
+    // Validate rating range
+    if (!minR || !maxR || minR >= maxR) {
+      return res.status(400).json({ error: `Invalid rating range: ${minR} - ${maxR}. Min must be less than Max.` });
+    }
+
     const midR = Math.floor((minR + maxR) / 2);
 
     // 6. Filter problems into two halves by rating
+    // Lower half: [minR, midR]
+    // Upper half: (midR, maxR]  — strictly greater than midR
     const lowerHalf = data.result.problems.filter(
       p => p.rating && p.rating >= minR && p.rating <= midR
     );
@@ -298,15 +324,21 @@ const startGame = async (req, res) => {
       p => p.rating && p.rating > midR && p.rating <= maxR
     );
 
-    // 7. Shuffle each half and pick one from each
-    const shuffledLower = lowerHalf.sort(() => Math.random() - 0.5);
-    const shuffledUpper = upperHalf.sort(() => Math.random() - 0.5);
-
-    if (shuffledLower.length < 1 || shuffledUpper.length < 1) {
-      return res.status(500).json({ error: 'Could not fetch enough problems. Try adjusting rating range.' });
+    // 7. Fisher-Yates shuffle each half and pick one from each
+    for (let i = lowerHalf.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [lowerHalf[i], lowerHalf[j]] = [lowerHalf[j], lowerHalf[i]];
+    }
+    for (let i = upperHalf.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [upperHalf[i], upperHalf[j]] = [upperHalf[j], upperHalf[i]];
     }
 
-    const selected = [shuffledLower[0], shuffledUpper[0]];
+    if (lowerHalf.length < 1 || upperHalf.length < 1) {
+      return res.status(500).json({ error: 'Could not fetch enough problems. Try adjusting rating range so both halves have problems.' });
+    }
+
+    const selected = [lowerHalf[0], upperHalf[0]];
 
     // 8. Create RoomProblem docs with fixed scoring
     await Promise.all(

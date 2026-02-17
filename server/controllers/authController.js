@@ -13,13 +13,34 @@ const loginUser = async (req, res) => {
 
     const trimmedHandle = handle.trim();
 
+    // Validate Codeforces username format
+    // Codeforces handles can contain letters, digits, hyphens, and underscores
+    const usernameRegex = /^[a-zA-Z0-9_-]+$/;
+    if (!usernameRegex.test(trimmedHandle)) {
+      return res.status(400).json({ 
+        status: false, 
+        error: 'Username can only contain letters, numbers, hyphens, and underscores' 
+      });
+    }
+
+    // Validate length (Codeforces usernames are typically 3-24 characters)
+    if (trimmedHandle.length < 3 || trimmedHandle.length > 24) {
+      return res.status(400).json({ 
+        status: false, 
+        error: 'Username must be between 3 and 24 characters' 
+      });
+    }
+
     // Call Codeforces API
     const response = await fetch(`${CODEFORCES_API_URL}?handles=${encodeURIComponent(trimmedHandle)}`);
     const data = await response.json();
 
     // Check if API response is OK
     if (data.status !== 'OK') {
-      return res.status(400).json({ status: false, error: data.comment || 'Invalid Codeforces handle' });
+      const errorMessage = data.comment === 'handles: User with handle ' + trimmedHandle + ' not found'
+        ? 'User not found on Codeforces'
+        : data.comment || 'Invalid Codeforces handle';
+      return res.status(400).json({ status: false, error: errorMessage });
     }
 
     const cfUser = data.result[0];

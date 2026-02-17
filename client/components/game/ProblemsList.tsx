@@ -62,7 +62,7 @@ export function ProblemsList({
           </div>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+        <div className="flex flex-col gap-4">
           {problems.map((problem, index) => {
             const problemKey = `${problem.contestId}-${problem.index}`;
             const solvedInfo = solvedProblems.get(problemKey);

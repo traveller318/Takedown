@@ -81,9 +81,9 @@ export function GameTimer({ startTime, duration, onTimeUp }: GameTimerProps) {
   const isWarning = timeRemaining < 300 && !isUrgent;
 
   const getTimerColor = () => {
-    if (isUrgent) return "text-red-700";
-    if (isWarning) return "text-orange-700";
-    return "text-pink-800";
+    if (isUrgent) return "text-red-300";
+    if (isWarning) return "text-orange-300";
+    return "text-white";
   };
 
   return (
@@ -97,7 +97,7 @@ export function GameTimer({ startTime, duration, onTimeUp }: GameTimerProps) {
         }
       `}
     >
-      <div className={`w-3 h-3 rounded-full ${isUrgent ? "bg-red-500 animate-pulse" : isWarning ? "bg-orange-500" : "bg-pink-500"}`} />
+      <div className={`w-3 h-3 rounded-full ${isUrgent ? "bg-red-400 animate-pulse" : isWarning ? "bg-orange-400" : "bg-white/80"}`} />
       <span className={`text-2xl font-kungfu tracking-widest ${getTimerColor()} transition-colors duration-300`}>
         {formatTime(timeRemaining)}
       </span>

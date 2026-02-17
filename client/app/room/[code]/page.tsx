@@ -854,23 +854,56 @@ export default function RoomPage() {
             </div>
           </div>
 
-          {/* Room Settings Section */}
-          <div className="pt-2 px-6 pb-6 relative">
-            <div className="flex items-center gap-3 mb-4 pb-2">
-              <Scroll className="h-6 w-6 text-[#1A1A1A]" />
-              <h2
-                className={`text-2xl font-bold text-[#1A1A1A] ${shojumaru.className}`}
-              >
-                Scroll of Rules
-              </h2>
-            </div>
+          {/* Room Settings Section - Ancient Scroll Style */}
+          <div className="relative">
+            {/* Scroll Container with rolled edges effect */}
+            <div className="relative bg-linear-to-br from-[#D4A574] via-[#E8D4A8] to-[#C9A875] rounded-2xl shadow-2xl overflow-hidden border-4 border-[#8B6914]">
+              {/* Top scroll rod */}
+              <div className="absolute -top-3 left-0 right-0 h-6 bg-linear-to-r from-[#654321] via-[#8B6914] to-[#654321] rounded-full shadow-lg border-2 border-[#3e2723]"></div>
+              
+              {/* Bottom scroll rod */}
+              <div className="absolute -bottom-3 left-0 right-0 h-6 bg-linear-to-r from-[#654321] via-[#8B6914] to-[#654321] rounded-full shadow-lg border-2 border-[#3e2723]"></div>
+              
+              {/* Left scroll edge shadow */}
+              <div className="absolute left-0 top-6 bottom-6 w-4 bg-linear-to-r from-black/20 to-transparent pointer-events-none"></div>
+              
+              {/* Right scroll edge shadow */}
+              <div className="absolute right-0 top-6 bottom-6 w-4 bg-linear-to-l from-black/20 to-transparent pointer-events-none"></div>
+              
+              {/* Decorative corner seals */}
+              <div className="absolute top-8 left-8 w-8 h-8 bg-[#DC143C] rounded-full border-2 border-[#8B0000] opacity-80 shadow-lg"></div>
+              <div className="absolute top-8 right-8 w-8 h-8 bg-[#DC143C] rounded-full border-2 border-[#8B0000] opacity-80 shadow-lg"></div>
+              
+              {/* Paper texture overlay */}
+              <div className="absolute inset-0 opacity-30 pointer-events-none" style={{
+                backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%238B4513' fill-opacity='0.1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`
+              }}></div>
+              
+              {/* Content area with padding to avoid scroll rods */}
+              <div className="relative pt-8 px-8 pb-8 mt-4 mb-4">
+                {/* Decorative top border pattern */}
+                <div className="absolute top-0 left-8 right-8 h-1 bg-linear-to-r from-transparent via-[#8B0000] to-transparent opacity-50"></div>
+                
+                <div className="flex items-center gap-3 mb-6 justify-center">
+                  {/* <Scroll className="h-7 w-7 text-[#8B0000]" /> */}
+                  <h2
+                    className={`text-3xl font-bold text-[#3e2723] ${shojumaru.className} drop-shadow-md`}
+                    style={{
+                      textShadow: '2px 2px 4px rgba(139,0,0,0.3)'
+                    }}
+                  >
+                    竜 Scroll of Rules 竜
+                  </h2>
+                  {/* <Scroll className="h-7 w-7 text-[#8B0000]" /> */}
+                </div>
 
             <div className="space-y-6">
               <div className="grid grid-cols-2 gap-6">
                 <div>
                   <label
-                    className={`block text-lg text-[#1A1A1A] mb-2 ${shojumaru.className}`}
+                    className={`block text-lg text-[#3e2723] mb-3 ${shojumaru.className} flex items-center gap-2`}
                   >
+                    <span className="text-xl">☯</span>
                     Min Chi
                   </label>
                   <Select
@@ -881,11 +914,11 @@ export default function RoomPage() {
                     disabled={!isHost}
                   >
                     <SelectTrigger
-                      className={`border-2 border-[#2D5A27]/40 bg-[#F5E6CC]/80 text-[#1A1A1A] font-extrabold ${!isHost ? "opacity-60 cursor-not-allowed" : "hover:border-[#2D5A27]"}`}
+                      className={`border-3 border-[#8B6914] bg-[#F5DEB3] text-[#3e2723] font-extrabold text-lg h-12 shadow-[inset_0_2px_4px_rgba(0,0,0,0.2)] ${!isHost ? "opacity-60 cursor-not-allowed" : "hover:border-[#654321] hover:shadow-[inset_0_3px_6px_rgba(0,0,0,0.3)]"}`}
                     >
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent className="bg-[#FDF5E6] border-2 border-[#2D5A27] text-[#1A1A1A] font-bold">
+                    <SelectContent className="bg-[#F5DEB3] border-3 border-[#8B6914] text-[#3e2723] font-bold">
                       {[
                         800, 900, 1000, 1100, 1200, 1300, 1400, 1500, 1600,
                         1700, 1800,
@@ -893,7 +926,7 @@ export default function RoomPage() {
                         <SelectItem
                           key={rating}
                           value={rating.toString()}
-                          className="focus:bg-[#2D5A27]/20 focus:text-[#1A1A1A] font-bold"
+                          className="focus:bg-[#8B6914]/30 focus:text-[#3e2723] font-bold"
                         >
                           {rating}
                         </SelectItem>
@@ -904,8 +937,9 @@ export default function RoomPage() {
 
                 <div>
                   <label
-                    className={`block text-lg text-[#1A1A1A] mb-2 ${shojumaru.className}`}
+                    className={`block text-lg text-[#3e2723] mb-3 ${shojumaru.className} flex items-center gap-2`}
                   >
+                    <span className="text-xl">☯</span>
                     Max Chi
                   </label>
                   <Select
@@ -916,11 +950,11 @@ export default function RoomPage() {
                     disabled={!isHost}
                   >
                     <SelectTrigger
-                      className={`border-2 border-[#2D5A27]/40 bg-[#F5E6CC]/80 text-[#1A1A1A] font-extrabold ${!isHost ? "opacity-60 cursor-not-allowed" : "hover:border-[#2D5A27]"}`}
+                      className={`border-3 border-[#8B6914] bg-[#F5DEB3] text-[#3e2723] font-extrabold text-lg h-12 shadow-[inset_0_2px_4px_rgba(0,0,0,0.2)] ${!isHost ? "opacity-60 cursor-not-allowed" : "hover:border-[#654321] hover:shadow-[inset_0_3px_6px_rgba(0,0,0,0.3)]"}`}
                     >
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent className="bg-[#FDF5E6] border-2 border-[#2D5A27] text-[#1A1A1A] font-bold">
+                    <SelectContent className="bg-[#F5DEB3] border-3 border-[#8B6914] text-[#3e2723] font-bold">
                       {[
                         1000, 1100, 1200, 1300, 1400, 1500, 1600, 1700, 1800,
                         1900, 2000,
@@ -928,7 +962,7 @@ export default function RoomPage() {
                         <SelectItem
                           key={rating}
                           value={rating.toString()}
-                          className="focus:bg-[#2D5A27]/20 focus:text-[#1A1A1A] font-bold"
+                          className="focus:bg-[#8B6914]/30 focus:text-[#3e2723] font-bold"
                         >
                           {rating}
                         </SelectItem>
@@ -941,22 +975,24 @@ export default function RoomPage() {
               <div className="grid grid-cols-2 gap-6">
                 <div>
                   <label
-                    className={`block text-lg text-[#1A1A1A] mb-2 ${shojumaru.className}`}
+                    className={`block text-lg text-[#3e2723] mb-3 ${shojumaru.className} flex items-center gap-2`}
                   >
+                    <span className="text-xl">📜</span>
                     Challenges
                   </label>
-                  <div className="flex items-center h-10 px-3 rounded-md border-2 border-[#2D5A27] bg-[#D2B48C] text-[#3e2723] font-bold shadow-[inset_0_2px_4px_rgba(0,0,0,0.1)] font-mono text-center justify-center transform -rotate-1">
+                  <div className="flex items-center h-12 px-4 rounded-md border-3 border-[#8B6914] bg-linear-to-br from-[#DEB887] to-[#D2B48C] text-[#3e2723] font-bold shadow-[inset_0_2px_4px_rgba(0,0,0,0.2),0_2px_8px_rgba(0,0,0,0.3)] font-mono text-center justify-center transform -rotate-1 text-lg">
                     2 Slips
                   </div>
                 </div>
 
                 <div>
                   <label
-                    className={`block text-lg text-[#1A1A1A] mb-2 ${shojumaru.className}`}
+                    className={`block text-lg text-[#3e2723] mb-3 ${shojumaru.className} flex items-center gap-2`}
                   >
+                    <span className="text-xl">⏰</span>
                     Time Limit
                   </label>
-                  <div className="flex items-center h-10 px-3 rounded-md border-2 border-[#2D5A27] bg-[#D2B48C] text-[#3e2723] font-bold shadow-[inset_0_2px_4px_rgba(0,0,0,0.1)] font-mono text-center justify-center transform rotate-1">
+                  <div className="flex items-center h-12 px-4 rounded-md border-3 border-[#8B6914] bg-linear-to-br from-[#DEB887] to-[#D2B48C] text-[#3e2723] font-bold shadow-[inset_0_2px_4px_rgba(0,0,0,0.2),0_2px_8px_rgba(0,0,0,0.3)] font-mono text-center justify-center transform rotate-1 text-lg">
                     15 Minutes
                   </div>
                 </div>
@@ -967,23 +1003,53 @@ export default function RoomPage() {
                   onClick={handleSaveSettings}
                   disabled={saveSettingsState.isLoading}
                   className={`
-                    w-full mt-4
-                    bg-[#2D5A27] hover:bg-[#1f421b] 
-                    text-[#FDF5E6] border border-[#FDF5E6]/20
-                    ${shojumaru.className} tracking-wider text-lg py-6
-                    shadow-lg hover:shadow-xl transition-all
+                    w-full mt-6
+                    bg-linear-to-r from-[#2D5A27] via-[#1f421b] to-[#2D5A27]
+                    hover:from-[#1f421b] hover:via-[#2D5A27] hover:to-[#1f421b]
+                    text-[#FDF5E6] border-2 border-[#8B6914]
+                    ${shojumaru.className} tracking-widest text-lg py-6
+                    shadow-[0_6px_0_#1a3015,0_8px_20px_rgba(0,0,0,0.4)]
+                    hover:shadow-[0_4px_0_#1a3015,0_6px_20px_rgba(0,0,0,0.5)]
+                    active:shadow-[0_2px_0_#1a3015,0_3px_10px_rgba(0,0,0,0.3)]
+                    active:translate-y-1
+                    transition-all duration-150
+                    rounded-lg
+                    relative overflow-hidden
+                    group
                   `}
                 >
+                  {/* Button shine effect */}
+                  <div className="absolute inset-0 bg-linear-to-r from-transparent via-white/20 to-transparent translate-x-[-200%] group-hover:translate-x-[200%] transition-transform duration-1000"></div>
+                  
                   {saveSettingsState.isLoading ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Inscribing...
-                    </>
+                    <div className="flex items-center justify-center gap-2 relative z-10">
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                      <span>Inscribing Sacred Text...</span>
+                    </div>
                   ) : (
-                    "SEAL THE SCROLL"
+                    <div className="flex items-center justify-center gap-3 relative z-10">
+                      <span className="text-2xl">🔥</span>
+                      <span>SEAL THE SCROLL</span>
+                      <span className="text-2xl">🔥</span>
+                    </div>
                   )}
                 </Button>
               )}
+              
+              {/* Decorative bottom border pattern */}
+              <div className="absolute bottom-6 left-8 right-8 h-1 bg-linear-to-r from-transparent via-[#8B0000] to-transparent opacity-50"></div>
+            </div>
+            </div>
+            
+            {/* Hanging scroll tassels */}
+            <div className="absolute -bottom-8 left-1/2 transform -translate-x-12 flex gap-4">
+              <div className="w-2 h-16 bg-linear-to-b from-[#DC143C] to-[#8B0000] rounded-full shadow-lg"></div>
+              <div className="w-2 h-20 bg-linear-to-b from-[#DC143C] to-[#8B0000] rounded-full shadow-lg"></div>
+            </div>
+            <div className="absolute -bottom-8 right-1/2 transform translate-x-12 flex gap-4">
+              <div className="w-2 h-20 bg-linear-to-b from-[#DC143C] to-[#8B0000] rounded-full shadow-lg"></div>
+              <div className="w-2 h-16 bg-linear-to-b from-[#DC143C] to-[#8B0000] rounded-full shadow-lg"></div>
+            </div>
             </div>
           </div>
         </div>

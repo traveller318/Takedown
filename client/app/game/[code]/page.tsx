@@ -623,8 +623,8 @@ export default function GamePage() {
               onClick={() => setActiveTab("problems")}
               className={`px-8 py-2 rounded-lg font-kungfu tracking-wider text-lg transition-all duration-200 border-2 ${
                 activeTab === "problems"
-                  ? "bg-pink-300/60 border-pink-400/60 text-pink-900 shadow-[0_0_15px_rgba(255,182,193,0.3)]"
-                  : "bg-white/20 border-pink-300/30 text-pink-700/60 hover:text-pink-800 hover:bg-white/30 hover:border-pink-400/40"
+                  ? "bg-pink-300/60 border-pink-400/60 text-white shadow-[0_0_15px_rgba(255,182,193,0.3)]"
+                  : "bg-white/20 border-pink-300/30 text-white/60 hover:text-white hover:bg-white/30 hover:border-pink-400/40"
               }`}
             >
               Problems
@@ -633,8 +633,8 @@ export default function GamePage() {
               onClick={() => setActiveTab("leaderboard")}
               className={`px-8 py-2 rounded-lg font-kungfu tracking-wider text-lg transition-all duration-200 border-2 ${
                 activeTab === "leaderboard"
-                  ? "bg-pink-300/60 border-pink-400/60 text-pink-900 shadow-[0_0_15px_rgba(255,182,193,0.3)]"
-                  : "bg-white/20 border-pink-300/30 text-pink-700/60 hover:text-pink-800 hover:bg-white/30 hover:border-pink-400/40"
+                  ? "bg-pink-300/60 border-pink-400/60 text-white shadow-[0_0_15px_rgba(255,182,193,0.3)]"
+                  : "bg-white/20 border-pink-300/30 text-white/60 hover:text-white hover:bg-white/30 hover:border-pink-400/40"
               }`}
             >
               Leaderboard
@@ -660,25 +660,25 @@ export default function GamePage() {
               {/* Instructions - Right Side (1/3 width) */}
               <div className="lg:col-span-1">
                 <div className="kfp-panel sticky top-6">
-                  <h3 className="text-lg font-kungfu tracking-wider mb-4 flex items-center gap-2 text-pink-700">
+                  <h3 className="text-lg font-kungfu tracking-wider mb-4 flex items-center gap-2 text-white">
                     <span className="text-xl">⭐</span>
                     Instructions
                   </h3>
-                  <div className="space-y-3 text-pink-800/80">
+                  <div className="space-y-3 text-white/80">
                     <div className="flex items-start gap-3">
-                      <span className="text-green-600 mt-0.5">✓</span>
-                      <p className="font-kungfu tracking-wide text-sm">Click <span className="text-pink-900 font-semibold">Check</span> once you see accepted submission on CF.</p>
+                      <span className="text-green-400 mt-0.5">✓</span>
+                      <p className="font-kungfu tracking-wide text-sm">Click <span className="text-white font-semibold">Check</span> once you see accepted submission on CF.</p>
                     </div>
                     <div className="flex items-start gap-3">
-                      <span className="text-pink-400 mt-1">•</span>
+                      <span className="text-white/50 mt-1">•</span>
                       <p className="font-kungfu tracking-wide text-sm">Points are calculated based on time your solution was accepted.</p>
                     </div>
                     <div className="flex items-start gap-3">
-                      <span className="text-pink-400 mt-1">•</span>
+                      <span className="text-white/50 mt-1">•</span>
                       <p className="font-kungfu tracking-wide text-sm">No negative points for wrong submissions.</p>
                     </div>
                     <div className="flex items-start gap-3">
-                      <span className="text-green-600 mt-0.5">✓</span>
+                      <span className="text-green-400 mt-0.5">✓</span>
                       <p className="font-kungfu tracking-wide text-sm">You can check your progress on the leaderboard, updates every minute.</p>
                     </div>
                   </div>

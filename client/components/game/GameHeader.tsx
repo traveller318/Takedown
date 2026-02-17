@@ -84,14 +84,14 @@ export function GameHeader({
             {/* Cherry blossom icon */}
             <span className="text-3xl">🌸</span>
             <div>
-              <h1 className="text-2xl md:text-3xl font-kungfu tracking-wider text-pink-800 drop-shadow-sm">
+              <h1 className="text-2xl md:text-3xl font-kungfu tracking-wider text-white drop-shadow-sm">
                 {isGameEnded ? "Battle Ended" : "Battle in Progress"}
               </h1>
               <div className="flex items-center gap-3 mt-1">
-                <span className="text-pink-600/70 font-kungfu text-sm tracking-wide">Room:</span>
+                <span className="text-white/70 font-kungfu text-sm tracking-wide">Room:</span>
                 <Badge
                   variant="secondary"
-                  className="bg-white/60 text-pink-800 font-kungfu text-sm px-3 py-1 border border-pink-300/50"
+                  className="bg-white/60 text-pink-800 font-kungfu text-sm px-3 py-1 border border-white/40"
                 >
                   {roomCode}
                 </Badge>
@@ -106,7 +106,7 @@ export function GameHeader({
                       isConnected ? "bg-green-500 shadow-[0_0_6px_rgba(34,197,94,0.6)]" : "bg-yellow-500 animate-pulse"
                     }`}
                   />
-                  <span className="text-xs font-kungfu tracking-wide">
+                  <span className="text-xs font-kungfu tracking-wide text-white/90">
                     {isConnected ? "Live" : "Connecting..."}
                   </span>
                 </div>

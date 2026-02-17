@@ -37,14 +37,16 @@ app.use(cors({
 app.use(express.json());
 
 // Session middleware configuration
+// Note: For local development connecting to HTTPS backend, set ALLOW_HTTP_COOKIES=true
+const isProduction = process.env.NODE_ENV === 'production' && !process.env.ALLOW_HTTP_COOKIES;
 const sessionMiddleware = session({
   secret: process.env.SESSION_SECRET,
   saveUninitialized: false,
   resave: false,
   cookie: {
-    secure: false,
+    secure: isProduction, // true for HTTPS in production
     httpOnly: true,
-    sameSite: 'lax',
+    sameSite: isProduction ? 'none' : 'lax', // 'none' required for cross-site HTTPS
     maxAge: 1000 * 60 * 60 * 24 // 24 hours
   }
 });

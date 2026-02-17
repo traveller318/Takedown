@@ -4,9 +4,20 @@ const User = require('../models/User');
 let io;
 
 const initSocket = (server, sessionMiddleware) => {
+  const allowedOrigins = process.env.CLIENT_URL ? process.env.CLIENT_URL.split(',') : ['http://localhost:3000'];
+  
   io = new Server(server, {
     cors: {
-      origin: process.env.CLIENT_URL,
+      origin: function (origin, callback) {
+        // Allow requests with no origin (like mobile apps or curl requests)
+        if (!origin) return callback(null, true);
+        
+        if (allowedOrigins.indexOf(origin) !== -1) {
+          callback(null, true);
+        } else {
+          callback(new Error('Not allowed by CORS'));
+        }
+      },
       credentials: true
     }
   });

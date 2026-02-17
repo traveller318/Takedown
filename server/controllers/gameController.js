@@ -7,6 +7,7 @@ const Room = require('../models/Room');
 const RoomProblem = require('../models/RoomProblem');
 const Score = require('../models/Score');
 const User = require('../models/User');
+const UsedProblem = require('../models/UsedProblem');
 const mongoose = require('mongoose');
 
 // Codeforces API base URL
@@ -171,7 +172,12 @@ const startGameInternal = async (roomCode) => {
 
     console.log('[startGameInternal] Got', data.result.problems.length, 'problems from CF');
 
-    // 4. Calculate mid rating for split selection
+    // 4. Get already used problems to avoid repetition
+    const usedProblems = await UsedProblem.find({});
+    const usedSet = new Set(usedProblems.map(up => `${up.contestId}${up.index}`));
+    console.log('[startGameInternal] Found', usedSet.size, 'previously used problems');
+
+    // 5. Calculate mid rating for split selection
     const minR = room.settings.minRating;
     const maxR = room.settings.maxRating;
 
@@ -186,20 +192,32 @@ const startGameInternal = async (roomCode) => {
     console.log('[startGameInternal] Rating range from DB:', minR, '-', maxR);
     console.log('[startGameInternal] Rating split: lower [' + minR + '-' + midR + '], upper [' + (midR + 1) + '-' + maxR + ']');
 
-    // 5. Filter problems into two halves by rating
+    // 6. Filter problems into two halves by rating, excluding already used ones
     // Lower half: [minR, midR]
     // Upper half: (midR, maxR]  — strictly greater than midR
-    const lowerHalf = data.result.problems.filter(
-      p => p.rating && p.rating >= minR && p.rating <= midR
+    let lowerHalf = data.result.problems.filter(
+      p => p.rating && p.rating >= minR && p.rating <= midR && !usedSet.has(`${p.contestId}${p.index}`)
     );
-    const upperHalf = data.result.problems.filter(
-      p => p.rating && p.rating > midR && p.rating <= maxR
+    let upperHalf = data.result.problems.filter(
+      p => p.rating && p.rating > midR && p.rating <= maxR && !usedSet.has(`${p.contestId}${p.index}`)
     );
 
-    console.log('[startGameInternal] Lower half:', lowerHalf.length, 'problems (ratings ' + minR + '-' + midR + ')');
-    console.log('[startGameInternal] Upper half:', upperHalf.length, 'problems (ratings ' + (midR + 1) + '-' + maxR + ')');
+    console.log('[startGameInternal] Unused - Lower half:', lowerHalf.length, 'problems (ratings ' + minR + '-' + midR + ')');
+    console.log('[startGameInternal] Unused - Upper half:', upperHalf.length, 'problems (ratings ' + (midR + 1) + '-' + maxR + ')');
 
-    // 6. Fisher-Yates shuffle each half and pick one from each
+    // If not enough unused problems, fallback to all problems (including used ones)
+    if (lowerHalf.length < 1 || upperHalf.length < 1) {
+      console.log('[startGameInternal] Not enough unused problems, falling back to all problems including used ones');
+      lowerHalf = data.result.problems.filter(
+        p => p.rating && p.rating >= minR && p.rating <= midR
+      );
+      upperHalf = data.result.problems.filter(
+        p => p.rating && p.rating > midR && p.rating <= maxR
+      );
+      console.log('[startGameInternal] All problems - Lower half:', lowerHalf.length, 'Upper half:', upperHalf.length);
+    }
+
+    // 7. Fisher-Yates shuffle each half and pick one from each
     for (let i = lowerHalf.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [lowerHalf[i], lowerHalf[j]] = [lowerHalf[j], lowerHalf[i]];
@@ -221,11 +239,33 @@ const startGameInternal = async (roomCode) => {
     console.log('[startGameInternal] Problem 1 (easier):', selected[0].contestId + selected[0].index, 'rating:', selected[0].rating);
     console.log('[startGameInternal] Problem 2 (harder):', selected[1].contestId + selected[1].index, 'rating:', selected[1].rating);
 
-    // 7. Clear any existing problems for this room (in case of restart)
+    // 7. Mark selected problems as used (or increment usage count if already exists)
+    for (const p of selected) {
+      try {
+        await UsedProblem.findOneAndUpdate(
+          { contestId: p.contestId, index: p.index },
+          { 
+            $setOnInsert: { 
+              contestId: p.contestId, 
+              index: p.index, 
+              rating: p.rating,
+              firstUsedAt: new Date()
+            },
+            $inc: { usageCount: 1 }
+          },
+          { upsert: true, new: true }
+        );
+        console.log('[startGameInternal] Marked problem', p.contestId + p.index, 'as used');
+      } catch (error) {
+        console.error('[startGameInternal] Error marking problem as used:', error);
+      }
+    }
+
+    // 8. Clear any existing problems for this room (in case of restart)
     await RoomProblem.deleteMany({ roomId: room._id });
     console.log('[startGameInternal] Cleared existing problems');
 
-    // 8. Create RoomProblem docs with fixed scoring
+    // 9. Create RoomProblem docs with fixed scoring
     const problemDocs = await Promise.all(
       selected.map((p, idx) =>
         RoomProblem.create({
@@ -240,18 +280,18 @@ const startGameInternal = async (roomCode) => {
     );
     console.log('[startGameInternal] Created', problemDocs.length, 'RoomProblem docs');
 
-    // 9. room.status = "started"
+    // 10. room.status = "started"
     room.status = 'started';
 
-    // 10. room.startTime = now
+    // 11. room.startTime = now
     const startTime = new Date();
     room.startTime = startTime;
 
-    // 11. Save room
+    // 12. Save room
     await room.save();
     console.log('[startGameInternal] Room saved with status:', room.status);
 
-    // 12. Format problems for response
+    // 13. Format problems for response
     const problems = problemDocs.map(p => ({
       contestId: p.contestId,
       index: p.index,
@@ -303,7 +343,12 @@ const startGame = async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch problems from Codeforces' });
     }
 
-    // 5. Calculate mid rating for split selection
+    // 5. Get already used problems to avoid repetition
+    const usedProblems = await UsedProblem.find({});
+    const usedSet = new Set(usedProblems.map(up => `${up.contestId}${up.index}`));
+    console.log('[startGame] Found', usedSet.size, 'previously used problems');
+
+    // 6. Calculate mid rating for split selection
     const minR = room.settings.minRating;
     const maxR = room.settings.maxRating;
 
@@ -314,17 +359,30 @@ const startGame = async (req, res) => {
 
     const midR = Math.floor((minR + maxR) / 2);
 
-    // 6. Filter problems into two halves by rating
+    // 7. Filter problems into two halves by rating, excluding already used ones
     // Lower half: [minR, midR]
     // Upper half: (midR, maxR]  — strictly greater than midR
-    const lowerHalf = data.result.problems.filter(
-      p => p.rating && p.rating >= minR && p.rating <= midR
+    let lowerHalf = data.result.problems.filter(
+      p => p.rating && p.rating >= minR && p.rating <= midR && !usedSet.has(`${p.contestId}${p.index}`)
     );
-    const upperHalf = data.result.problems.filter(
-      p => p.rating && p.rating > midR && p.rating <= maxR
+    let upperHalf = data.result.problems.filter(
+      p => p.rating && p.rating > midR && p.rating <= maxR && !usedSet.has(`${p.contestId}${p.index}`)
     );
 
-    // 7. Fisher-Yates shuffle each half and pick one from each
+    console.log('[startGame] Unused - Lower half:', lowerHalf.length, 'Upper half:', upperHalf.length);
+
+    // If not enough unused problems, fallback to all problems (including used ones)
+    if (lowerHalf.length < 1 || upperHalf.length < 1) {
+      console.log('[startGame] Not enough unused problems, falling back to all problems');
+      lowerHalf = data.result.problems.filter(
+        p => p.rating && p.rating >= minR && p.rating <= midR
+      );
+      upperHalf = data.result.problems.filter(
+        p => p.rating && p.rating > midR && p.rating <= maxR
+      );
+    }
+
+    // 8. Fisher-Yates shuffle each half and pick one from each
     for (let i = lowerHalf.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [lowerHalf[i], lowerHalf[j]] = [lowerHalf[j], lowerHalf[i]];
@@ -340,7 +398,31 @@ const startGame = async (req, res) => {
 
     const selected = [lowerHalf[0], upperHalf[0]];
 
-    // 8. Create RoomProblem docs with fixed scoring
+    console.log('[startGame] Selected problems:', selected.map(p => p.contestId + p.index).join(', '));
+
+    // 9. Mark selected problems as used (or increment usage count if already exists)
+    for (const p of selected) {
+      try {
+        await UsedProblem.findOneAndUpdate(
+          { contestId: p.contestId, index: p.index },
+          { 
+            $setOnInsert: { 
+              contestId: p.contestId, 
+              index: p.index, 
+              rating: p.rating,
+              firstUsedAt: new Date()
+            },
+            $inc: { usageCount: 1 }
+          },
+          { upsert: true, new: true }
+        );
+        console.log('[startGame] Marked problem', p.contestId + p.index, 'as used');
+      } catch (error) {
+        console.error('[startGame] Error marking problem as used:', error);
+      }
+    }
+
+    // 10. Create RoomProblem docs with fixed scoring
     await Promise.all(
       selected.map((p, idx) =>
         RoomProblem.create({
@@ -354,14 +436,14 @@ const startGame = async (req, res) => {
       )
     );
 
-    // 9. room.status = "started"
+    // 11. room.status = "started"
     room.status = 'started';
 
-    // 10. room.startTime = now
+    // 12. room.startTime = now
     const startTime = new Date();
     room.startTime = startTime;
 
-    // 11. Save room
+    // 13. Save room
     await room.save();
 
     return res.json({

@@ -14,6 +14,9 @@ const healthController = require('./controllers/healthController');
 const app = express();
 const server = http.createServer(app);
 
+// Trust proxy - required for secure cookies behind reverse proxies (Render, Heroku, etc.)
+app.set('trust proxy', 1);
+
 // Connect to MongoDB
 connectDB();
 
@@ -37,16 +40,17 @@ app.use(cors({
 app.use(express.json());
 
 // Session middleware configuration
-// Note: For local development connecting to HTTPS backend, set ALLOW_HTTP_COOKIES=true
-const isProduction = process.env.NODE_ENV === 'production' && !process.env.ALLOW_HTTP_COOKIES;
+// Cross-origin cookies require: secure=true + sameSite='none'
+// For local-only dev (same origin), use secure=false + sameSite='lax'
+const isCrossOrigin = process.env.CROSS_ORIGIN === 'true' || process.env.NODE_ENV === 'production';
 const sessionMiddleware = session({
   secret: process.env.SESSION_SECRET,
   saveUninitialized: false,
   resave: false,
   cookie: {
-    secure: isProduction, // true for HTTPS in production
+    secure: isCrossOrigin,      // must be true for sameSite 'none'
     httpOnly: true,
-    sameSite: isProduction ? 'none' : 'lax', // 'none' required for cross-site HTTPS
+    sameSite: isCrossOrigin ? 'none' : 'lax', // 'none' required for cross-site cookies
     maxAge: 1000 * 60 * 60 * 24 // 24 hours
   }
 });

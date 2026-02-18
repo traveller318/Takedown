@@ -325,22 +325,21 @@ export default function GamePage() {
         checkTimeoutRef.current = null;
       }
       
-      // Update solved problems state
-      setSolvedProblems((prev) => {
-        const newMap = new Map(prev);
-        newMap.set(problemKey, { points: data.points });
-        return newMap;
-      });
-      
-      // Only clear checking state if it was the current user
+      // Only mark as solved for the CURRENT user
+      // Other players should keep seeing the points decrease until they solve it themselves
       if (isCurrentUser) {
+        setSolvedProblems((prev) => {
+          const newMap = new Map(prev);
+          newMap.set(problemKey, { points: data.points });
+          return newMap;
+        });
         setCheckingProblem(null);
         toast.success(`Problem Solved! +${data.points} points`, {
           icon: "🎉",
           duration: 4000,
         });
       } else if (data.handle) {
-        // Someone else solved it - show notification
+        // Someone else solved it - show notification but DON'T mark as solved on our UI
         toast.info(`${data.handle} solved problem ${data.index}!`, {
           icon: "⚡",
           duration: 3000,
